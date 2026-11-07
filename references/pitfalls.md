@@ -16,5 +16,5 @@
 | Seedance 实扣比报价高约 70% | 报价接口按清晰度×时长，实账按 token（含参考图） | 报价时按 1.7 倍告知；交付后 `lingjing usage show` 核对实扣 |
 | 生成视频里的对白没有字幕 | Seedance 现场人声不带时间轴 | `transcribe.py` 转写出每句时间，写进该镜 `subs`；该镜 `clipAudio` 保留原声 |
 | faster-whisper 报 `metadata_errors` | PyAV 版本不兼容 | `transcribe.py` 先用 ffmpeg 解码成 PCM 再送模型，绕开 PyAV |
-| 配乐很平、没起伏 | 各镜 `mood` 没标或都一样 | 拉开 calm/build/climax；lint 会提醒未标；见 `references/music.md` |
+| 配乐很平、没起伏 | 各镜 `mood` 没标或都一样（内置 BGM 只靠音量起伏） | 拉开 calm/build/climax；lint 会提醒未标；见 `references/music.md` |
 | 配乐盖住旁白 | 旁白密集的镜头标了 `climax` | 降为 `build`，高潮放在旁白短或无旁白的镜头 |

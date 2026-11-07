@@ -51,7 +51,7 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 7. **成片**：`python "$SKILL/scripts/build.py" <项目> --final`，自动跑 lint、配音、时间线、混音、渲染、QA。
 8. **交付**：成片路径、时长、QA 结果、`qa/final_sheet.jpg`、用到的生图模型及是否降级、没验到的点。
 
-配乐：给每镜标 `mood` 并选 `music.style`，规则和风格见 `references/music.md`。
+配乐：代码动画默认用内置 BGM，不用配置；给每镜标 `mood` 让音量跟剧情起伏。**用户明确要换 BGM 才改用 `music.file` / `music.style`**。规则见 `references/music.md`。
 
 写 `scenes.js` 前读 `references/engine.md`（运行时 API、确定性规则、视频素材、倍速）。踩坑与排查见 `references/pitfalls.md`。
 
@@ -65,8 +65,8 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 | `voice.py` | 逐镜配音（edge / say / sapi / 自带录音），文本不变不重配 |
 | `prep_video.py` | 视频素材拆帧，供画布逐帧确定性播放 |
 | `timeline.py` | 按旁白时长和每镜倍速生成时间线与字幕 |
-| `audio.py` | 配乐、音效、旁白混音（倍速旁白变速不变调）；配乐按每镜 `mood` 作曲 |
-| `score.py --list / --style X -o a.wav` | 配乐引擎；单独试听 6 种风格 |
+| `audio.py` | 配乐、音效、旁白混音（倍速旁白变速不变调）；默认内置 BGM，按每镜 `mood` 起伏 |
+| `bgm.py` / `score.py --list / --style X -o a.wav` | 内置 BGM 引擎 / 合成配乐引擎（试听 6 种风格） |
 | `render.py --stills/--sheet/--preview/--final` | 无头浏览器逐帧渲染 |
 | `transcribe.py <音视频>` | 本地语音转写带时间戳（faster-whisper），给生成视频对白配字幕、对齐口播稿 |
 | `lint.py` / `qa.py` | 出片前检查（品牌用词、禁用词、路径、缺素材、字幕重复）/ 出片后检查（时长、音量、黑帧、冻帧、联系表） |

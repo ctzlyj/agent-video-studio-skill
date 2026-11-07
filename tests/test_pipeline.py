@@ -174,4 +174,47 @@ class ScoreTest(unittest.TestCase):
             self.assertEqual(rep['style'], 'cinematic'); self.assertTrue((d / 'audio' / 'mix.wav').exists())
 
 
+
+class BuiltinTrackTest(unittest.TestCase):
+    SC = [{'ns': 0, 'nd': 6}, {'ns': 6, 'nd': 8}, {'ns': 14, 'nd': 8}, {'ns': 22, 'nd': 6}]
+
+    def test_source_priority_and_default(self):
+        import bgm
+        self.assertEqual(bgm.resolve(None, 'promo'), 'track'); self.assertEqual(bgm.resolve({}, 'documentary'), 'track')
+        self.assertEqual(bgm.resolve({}, 'ai-comic-drama'), 'style'); self.assertEqual(bgm.resolve({}, 'hybrid'), 'track')
+        self.assertEqual(bgm.resolve({'generate': 'none'}, 'promo'), 'generate'); self.assertEqual(bgm.resolve({'style': 'warm'}, 'promo'), 'style')
+        self.assertEqual(bgm.resolve({'file': 'assets/x.mp3', 'style': 'warm', 'generate': 'none'}, 'promo'), 'file')
+        with self.assertRaises(ValueError): bgm.resolve({'track': 'nope'}, 'promo')
+
+    def test_track_file_is_bundled(self):
+        import bgm
+        for spec in bgm.TRACKS.values(): self.assertTrue((SK / spec['file']).exists(), spec['file'])
+
+    def test_render_follows_energy_loops_and_fades(self):
+        import bgm, score
+        en = [.25, .55, .9, .3]; bed, info = bgm.render('default', self.SC, en, 28); rep = score.analyze(bed, self.SC, en)
+        self.assertTrue(rep['noClip'] and rep['arcOk'], rep['arcNote'])
+        self.assertEqual(float(abs(bed[int(28 * bgm.SR):]).max()), 0.0); self.assertLess(float(abs(bed[int(27.8 * bgm.SR):int(28 * bgm.SR)]).max()), .05)
+        long, _ = bgm.render('default', [{'ns': 0, 'nd': 170}], [.5], 170); tail = long[int(160 * bgm.SR):int(166 * bgm.SR)]
+        self.assertGreater(float(abs(tail).max()), .02)                                    # looped, not silent after the 160 s track ends
+
+    def test_silent_scene_drops_out(self):
+        import bgm
+        bed, _ = bgm.render('default', self.SC, [.5, 0.0, .5, .5], 28)
+        loud = float(abs(bed[int(2 * bgm.SR):int(5 * bgm.SR)]).max()); quiet = float(abs(bed[int(9 * bgm.SR):int(12 * bgm.SR)]).max())
+        self.assertLess(quiet, loud * .1)
+
+    def test_audio_script_uses_track_by_default_and_user_choice_overrides(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = proj(t, route='promo'); d.joinpath('audio').mkdir()
+            tl = {'duration': 14.0, 'scenes': [{'id': 's01', 'ns': 0, 'nd': 6, 'speed': 1.0, 'voStart': .45, 'voDur': 0}, {'id': 's02', 'ns': 6, 'nd': 8, 'speed': 1.0, 'voStart': .45, 'voDur': 0}], 'subs': []}
+            d.joinpath('timeline.json').write_text(json.dumps(tl), encoding='utf-8')
+            def run(music):
+                p = json.loads((d / 'project.json').read_text(encoding='utf-8')); p['music'] = music
+                if music is None: p.pop('music')
+                (d / 'project.json').write_text(json.dumps(p, ensure_ascii=False), encoding='utf-8')
+                r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'audio.py'), str(d)], capture_output=True, text=True, encoding='utf-8'); self.assertEqual(r.returncode, 0, r.stderr); return r.stdout
+            self.assertIn('built-in track', run(None)); rep = json.loads((d / 'audio' / 'score_report.json').read_text(encoding='utf-8')); self.assertEqual(rep['style'], 'track:default')
+            self.assertIn('score: warm', run({'style': 'warm'})); self.assertNotIn('built-in', run({'generate': 'none'}))
+
 if __name__ == '__main__': unittest.main()

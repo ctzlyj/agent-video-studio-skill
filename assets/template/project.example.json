@@ -5,7 +5,7 @@
   "brand": {"terms": {}, "banned": [], "credit": ""},
   "voice": {"engine": "edge", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "pitch": "+0Hz", "pronounce": {}},
   "subtitles": {"enabled": true, "replace": {}},
-  "music": {"style": "auto"},
+  "music": {"track": "default"},
   "sfx": {"transitions": true},
   "videos": {},
   "scenes": [

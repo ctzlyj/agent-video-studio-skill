@@ -13,7 +13,8 @@
 | 把这个视频/图片放进去 | 复制进 `assets/`，写进 `project.json`（视频走 `videos` + `prep_video.py`），在对应镜头 `drawVideo`；不要成片后叠加 |
 | 字幕挡住了 / 和画面字重复 | 调 `#sub` 位置或删屏幕上的同句文字 |
 | 换个声音 / 读错了 | `voice.voice` 换音色；读错的词加进 `voice.pronounce` |
-| 不要背景音乐 / 换音乐 | `music.generate: "none"` 或 `music.file` 指向有授权的音乐 |
-| 音乐太吵 / 太平 / 太快 / 想换风格 | 见 `references/music.md` 的「改音乐的大白话」（改 `mood`、`style`、`bpm`、`key`、`seed`） |
+| 不要背景音乐 | `music.generate: "none"` |
+| 换音乐 | 先问：用自己的歌（`music.file`），还是合成一首（`music.style`）；默认内置 BGM 不动 |
+| 音乐太吵 / 太平 | 改各镜 `mood`，或 `music.gain`；仍不行再按 `references/music.md` 换成合成配乐 |
 
 每次改完在回复里列：改了哪些镜头、新时长、QA 结果。

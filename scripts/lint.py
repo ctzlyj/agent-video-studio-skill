@@ -49,15 +49,18 @@ def check(project, root: Path):
     f = music.get('file')
     if f and ABS.match(f): add('error', 'abs_path', 'music', f'absolute path "{f}"')
     elif f and not (root / f).exists(): add('error', 'missing_asset', 'music', f'file not found: {f}')
-    if music.get('style'):
-        import score
-        try: score.pick_style(music['style'], project.get('route')); score.parse_key(music.get('key'))
+    import bgm, score
+    try: src = bgm.resolve(music, project.get('route'))
+    except ValueError as e: src = None; add('error', 'music', 'music', str(e))
+    if src == 'style':
+        try: score.pick_style(music.get('style') or 'auto', project.get('route')); score.parse_key(music.get('key'))
         except ValueError as e: add('error', 'music', 'music', str(e))
+    if src in ('track', 'style'):
         for sc in project.get('scenes', []):
             if sc.get('mood') and sc['mood'] not in score.MOODS: add('error', 'mood', sc.get('id', '?'), f'mood "{sc["mood"]}" not in ' + '/'.join(score.MOODS))
             if sc.get('energy') is not None and not 0 <= float(sc['energy']) <= 1: add('error', 'mood', sc.get('id', '?'), 'energy must be 0-1')
         if not any(sc.get('mood') or sc.get('energy') is not None for sc in project.get('scenes', [])):
-            add('warn', 'mood', 'scenes', 'no scene has "mood"/"energy"; the score will follow a default intro-build-climax-outro arc. Tag each scene so the music matches the story')
+            add('warn', 'mood', 'scenes', 'no scene has "mood"/"energy"; the music will follow a default intro-build-climax-outro arc. Tag each scene so the music matches the story')
     for f in ('scenes.js', 'index.html'):
         p = root / f
         if p.exists():

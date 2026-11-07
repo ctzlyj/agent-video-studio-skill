@@ -1,5 +1,6 @@
 """Music bed + sfx + narration mix, following the (speed-mapped) timeline.
-music: {"style": "auto"|"warm"|"bright"|"tech"|"cinematic"|"ambient"|"suspense", "bpm": 90, "key": "D minor", "seed": 7}
+music: omitted / {"track": "default"}  built-in track (default), ridden by each scene's mood/energy; looped if the video is longer
+       {"style": "auto"|"warm"|"bright"|"tech"|"cinematic"|"ambient"|"suspense", "bpm": 90, "key": "D minor", "seed": 7}
          mood-driven score that follows each scene's "mood"/"energy" (see scripts/score.py)
        {"file": "assets/music.mp3"} (licensed track) | {"generate": "ambient"|"pulse"|"none"} (legacy plain bed)
 sfx in scenes: "sfx": [[0.8, "tick"], [3.2, "ok"]]  (scene-local 1x seconds)
@@ -9,7 +10,7 @@ import argparse, os, sys, wave
 import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
 from avs_common import project_dir, load_json, save_json, ffmpeg, run
-import score as scoremod
+import score as scoremod, bgm as bgmmod
 
 SR = 48000
 def _env(x, a=.01, r=.4): return np.minimum(1, x / a) * np.exp(-x / r)
@@ -46,11 +47,17 @@ def sfx_wave(kind, rng):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('project', nargs='?'); a = ap.parse_args()
     d = project_dir(a.project); p = load_json(d / 'project.json'); tl = load_json(d / 'timeline.json'); dur = tl['duration']
-    ad = d / 'audio'; ad.mkdir(exist_ok=True); m = p.get('music') or {'generate': 'ambient'}; rng = np.random.default_rng(3)
-    scenes = {s['id']: s for s in p['scenes']}
-    if m.get('file'): bed = music_bed('none', dur)
-    elif m.get('style'):
-        style = scoremod.pick_style(m['style'], p.get('route')); tonic, mode = scoremod.parse_key(m.get('key'))
+    ad = d / 'audio'; ad.mkdir(exist_ok=True); m = p.get('music') or {}; rng = np.random.default_rng(3)
+    scenes = {s['id']: s for s in p['scenes']}; src = bgmmod.resolve(p.get('music'), p.get('route'))
+    if src == 'file': bed = music_bed('none', dur)
+    elif src == 'track':
+        en = scoremod.energies_for([scenes[s['id']] for s in tl['scenes']])
+        bed, info = bgmmod.render(m.get('track', 'default'), tl['scenes'], en, dur, gain=m.get('gain', 1.0))
+        rep = scoremod.analyze(bed, tl['scenes'], en); rep.update(info); rep['sceneIds'] = [s['id'] for s in tl['scenes']]; save_json(ad / 'score_report.json', rep)
+        print(f"bgm: built-in track '{info['track']}', looped x{max(1, -(-int(dur) // 159))}, energy {[round(x, 2) for x in en]}, scene dB {rep['sceneRmsDb']}")
+        if not (rep['noClip'] and rep['arcOk']): print(f"WARN bgm check: noClip={rep['noClip']} arcOk={rep['arcOk']} ({rep['arcNote']})")
+    elif src == 'style':
+        style = scoremod.pick_style(m.get('style') or 'auto', p.get('route')); tonic, mode = scoremod.parse_key(m.get('key'))
         en = scoremod.energies_for([scenes[s['id']] for s in tl['scenes']])
         bed, info = scoremod.render(style, tl['scenes'], en, dur, bpm=m.get('bpm'), tonic=tonic, mode=mode, seed=int(m.get('seed', 7)))
         rep = scoremod.analyze(bed, tl['scenes'], en); rep.update(info); rep['sceneIds'] = [s['id'] for s in tl['scenes']]; save_json(ad / 'score_report.json', rep)
