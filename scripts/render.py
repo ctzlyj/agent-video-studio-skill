@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse, asyncio, functools, http.server, json, os, re, socketserver, subprocess, sys, threading, time
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(__file__))
-from avs_common import project_dir, load_json, ffmpeg, run, SKILL_DIR
+from avs_common import project_dir, load_json, ffmpeg, run, SKILL_DIR, safe_name
 
 def sync_runtime(d: Path):
     for f in ('avs-runtime.js',):
@@ -22,7 +22,6 @@ def sync_runtime(d: Path):
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
 
-def safe_name(s): return re.sub(r'[\\/:*?"<>|\s]+', '_', s).strip('_') or 'video'
 
 async def _render(d, a):
     from playwright.async_api import async_playwright

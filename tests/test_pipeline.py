@@ -217,4 +217,51 @@ class BuiltinTrackTest(unittest.TestCase):
             self.assertIn('built-in track', run(None)); rep = json.loads((d / 'audio' / 'score_report.json').read_text(encoding='utf-8')); self.assertEqual(rep['style'], 'track:default')
             self.assertIn('score: warm', run({'style': 'warm'})); self.assertNotIn('built-in', run({'generate': 'none'}))
 
+
+class FinalizeTest(unittest.TestCase):
+    def test_srt_text_is_speed_mapped_and_numbered(self):
+        import finalize
+        out = finalize.srt_text({'subs': [{'s': 0.45, 'e': 4.09, 'text': '第一句'}, {'s': 3661.5, 'e': 3662.0, 'text': '第二句'}, {'s': 5, 'e': 6, 'text': ''}]})
+        self.assertIn('1\n00:00:00,450 --> 00:00:04,090\n第一句\n', out); self.assertIn('2\n01:01:01,500 --> 01:01:02,000\n第二句\n', out); self.assertNotIn('3\n', out)
+
+    def test_loudness_is_measured_and_normalised_to_target(self):
+        import finalize
+        from avs_common import ffmpeg
+        ff = ffmpeg()
+        with tempfile.TemporaryDirectory() as t:
+            src = Path(t) / 'in.mp4'
+            r = subprocess.run([ff, '-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=160x90:d=6:r=10', '-f', 'lavfi', '-i', 'sine=f=300:d=6', '-af', 'volume=-31dB', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', str(src)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            before, _ = finalize.measure(ff, src); self.assertLess(before, -25)
+            out = Path(t) / 'out.mp4'; finalize.normalise_audio(ff, src, out, -16.0, t)
+            after, tp = finalize.measure(ff, out); self.assertLess(abs(after + 16.0), 1.2); self.assertLessEqual(tp, -1.0)
+            self.assertEqual(finalize.decode_errors(ff, out), [])
+
+    def test_script_refuses_overwrite_and_bad_target(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = proj(t); (d / 'out').mkdir(); (d / 'deliver').mkdir(); (d / 'deliver' / 'T.mp4').write_bytes(b'x'); (d / 'out' / 'T.mp4').write_bytes(b'x')
+            (d / 'timeline.json').write_text(json.dumps({'duration': 1, 'scenes': [], 'subs': []}), encoding='utf-8')
+            run = lambda *a: subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'finalize.py'), str(d), *a], capture_output=True, text=True, encoding='utf-8')
+            r = run(); self.assertNotEqual(r.returncode, 0); self.assertIn('refusing to overwrite', r.stderr + r.stdout)
+            r = run('--lufs', '-3'); self.assertNotEqual(r.returncode, 0); self.assertIn('between', r.stderr + r.stdout)
+
+
+class LintLengthTest(unittest.TestCase):
+    def test_long_subtitle_and_long_narration_warn(self):
+        import lint
+        with tempfile.TemporaryDirectory() as t:
+            d = proj(t); p = json.loads((d / 'project.json').read_text(encoding='utf-8'))
+            p['scenes'][0]['vo'] = '没有任何标点的一个特别特别特别特别特别特别特别特别特别特别特别长的句子' + '啊' * 10
+            kinds = {i['kind'] for i in lint.check(p, d)}; self.assertNotIn('sub_long', kinds)          # unpunctuated text is hard-split by split_sub
+            p['scenes'][1]['vo'] = '字' * 130 + '。'; kinds = {i['kind'] for i in lint.check(p, d)}; self.assertIn('vo_long', kinds)
+
+    def test_audio_writes_companion_track_without_music(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = proj(t, route='promo'); (d / 'audio').mkdir()
+            tl = {'duration': 8.0, 'scenes': [{'id': 's01', 'ns': 0, 'nd': 8, 'speed': 1.0, 'voStart': .45, 'voDur': 0}], 'subs': []}
+            (d / 'timeline.json').write_text(json.dumps(tl), encoding='utf-8')
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'audio.py'), str(d)], capture_output=True, text=True, encoding='utf-8'); self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertTrue((d / 'audio' / 'vo_sfx.wav').exists()); self.assertTrue((d / 'audio' / 'mix.wav').exists())
+
+
 if __name__ == '__main__': unittest.main()

@@ -31,7 +31,8 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 | 已有口播/录音，配画面 | voiceover | `references/routes/voiceover.md` |
 | 短而精的 MG 动画、片头、品牌演绎 | motion-graphics | `references/routes/motion-graphics.md` |
 | 发展史、纪录片、历史回顾、大事记 | documentary | `references/routes/documentary.md` |
-| 用户只给想法/文章，从剧本开始 | script-first | `references/routes/script-first.md` |
+| 用户只给想法，从剧本开始 | script-first | `references/routes/script-first.md` |
+| 用户给的是文章 / 链接 / 报告 / 现成口播稿 | 先 `references/article-intake.md` 提炼脚本，再按内容选路线（常见：explainer / promo / script-first） | `references/article-intake.md` |
 | AI 漫剧（动漫角色、连续剧情） | ai-comic-drama | `references/routes/ai-drama.md` |
 | AI 真人短剧、实拍质感镜头 | ai-live-drama | `references/routes/ai-drama.md` |
 | 代码动画里插几段 AI 生成镜头 | hybrid | 主路线 + `references/routes/ai-drama.md` 的"单镜生成" |
@@ -49,7 +50,7 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 5. **视觉方向**：按 `references/style-design.md` 写 2–3 个方向，各渲 1–3 张关键帧（`render.py --stills`），用户选定后写成 `STYLE.md`，再按它写 `style.css` 和 `scenes.js`。
 6. **小样**：`python "$SKILL/scripts/build.py" <项目> --sheet` 看每镜静帧联系表，再 `--preview` 出低清小样给用户看，按意见改（大白话意见怎么落地见 `references/revisions.md`）。
 7. **成片**：`python "$SKILL/scripts/build.py" <项目> --final`，自动跑 lint、配音、时间线、混音、渲染、QA。
-8. **交付**：成片路径、时长、QA 结果、`qa/final_sheet.jpg`、用到的生图模型及是否降级、没验到的点。
+8. **交付**：`python "$SKILL/scripts/finalize.py" <项目>` 把响度校准到 -16 LUFS、全片解码检查，输出 `deliver/` 下的成片、无 BGM 版、`.srt` 字幕和交付报告（任一检查不过就不发布）。回复里写：成片路径、时长、QA 与终检结果、联系表 `qa/final_sheet.jpg`、用到的生图模型及是否降级、没验到的点。
 
 配乐：代码动画默认用内置 BGM，不用配置；给每镜标 `mood` 让音量跟剧情起伏。**用户明确要换 BGM 才改用 `music.file` / `music.style`**。规则见 `references/music.md`。
 
@@ -69,5 +70,6 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 | `bgm.py` / `score.py --list / --style X -o a.wav` | 内置 BGM 引擎 / 合成配乐引擎（试听 6 种风格） |
 | `render.py --stills/--sheet/--preview/--final` | 无头浏览器逐帧渲染 |
 | `transcribe.py <音视频>` | 本地语音转写带时间戳（faster-whisper），给生成视频对白配字幕、对齐口播稿 |
+| `finalize.py [--lufs -16]` | 交付终检：响度校准到目标、真峰值、全片解码、黑场；输出成片 / 无 BGM 版 / SRT / 报告到 `deliver/`，不通过不发布 |
 | `lint.py` / `qa.py` | 出片前检查（品牌用词、禁用词、路径、缺素材、字幕重复）/ 出片后检查（时长、音量、黑帧、冻帧、联系表） |
 | `build.py --sheet/--preview/--final` | 一键串起以上步骤 |

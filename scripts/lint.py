@@ -39,6 +39,12 @@ def check(project, root: Path):
         sp = float(sc.get('speed', 1.0))
         if not 0.5 <= sp <= 2.0: add('error', 'speed', sid, f'speed {sp} outside 0.5-2.0')
         elif sp > 1.35: add('warn', 'speed', sid, f'speed {sp} may make on-screen text unreadable')
+    limit = max_chars(project)
+    for sc in project.get('scenes', []):
+        if not sc.get('vo') or sc.get('subs') or not sc.get('subtitle', True) or not (project.get('subtitles') or {}).get('enabled', True): continue
+        for line in split_sub(sc['vo'], limit):
+            if len(_norm(line)) > limit + 8: add('warn', 'sub_long', sc.get('id', '?'), f'subtitle line is {len(_norm(line))} chars (limit {limit}): "{line[:24]}..."; add punctuation or shorten the sentence')
+        if len(sc['vo']) > 120: add('warn', 'vo_long', sc.get('id', '?'), f'narration is {len(sc["vo"])} chars in one scene; split it (one idea per scene, <=120 chars)')
     ids = [s.get('id') for s in project.get('scenes', [])]
     if len(ids) != len(set(ids)): add('error', 'dup_id', 'scenes', 'duplicate scene ids')
     for name, v in (project.get('videos') or {}).items():

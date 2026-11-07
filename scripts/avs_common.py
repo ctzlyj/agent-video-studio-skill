@@ -43,6 +43,10 @@ def media_duration(path) -> float:
     if not m: raise RuntimeError(f'cannot read duration: {path}')
     return int(m[1]) * 3600 + int(m[2]) * 60 + float(m[3])
 
+def safe_name(s):
+    import re
+    return re.sub(r'[\\/:*?"<>|\s]+', '_', s).strip('_') or 'video'
+
 def run(cmd, **kw):
     return subprocess.run([str(c) for c in cmd], check=True, **kw)
 
