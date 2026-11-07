@@ -110,4 +110,68 @@ class TimedSubsTest(unittest.TestCase):
             s2 = tl['scenes'][1]
             self.assertAlmostEqual(sub['s'], s2['ns'] + 2.0, 3); self.assertEqual(sub['text'], '台词')
 
+
+class ScoreTest(unittest.TestCase):
+    SC = [{'ns': 0, 'nd': 6}, {'ns': 6, 'nd': 8}, {'ns': 14, 'nd': 8}, {'ns': 22, 'nd': 6}]
+
+    def test_energy_from_mood_and_explicit_energy(self):
+        import score
+        e = score.energies_for([{'mood': 'calm'}, {'mood': 'climax'}, {'energy': .6}, {'mood': 'silent'}])
+        self.assertEqual(e, [score.MOODS['calm'], score.MOODS['climax'], .6, 0.0])
+
+    def test_default_arc_when_untagged(self):
+        import score
+        e = score.energies_for([{} for _ in range(8)]); self.assertGreater(max(e), e[0]); self.assertLess(e[-1], max(e))
+
+    def test_voice_leading_keeps_chords_close(self):
+        import score
+        for style in score.STYLES:
+            vs = score.voicings(style, 0, 'major', 6)
+            for a, b in zip(vs, vs[1:]): self.assertLessEqual(abs(sum(a) / len(a) - sum(b) / len(b)), 6, style)
+
+    def test_every_style_renders_follows_energy_and_is_deterministic(self):
+        import score
+        en = [.25, .55, .9, .3]
+        for style in score.STYLES:
+            bed, info = score.render(style, self.SC, en, 28); rep = score.analyze(bed, self.SC, en)
+            self.assertTrue(rep['noClip'], style); self.assertTrue(rep['arcOk'], f"{style}: {rep['arcNote']}")
+            bed2, _ = score.render(style, self.SC, en, 28); self.assertTrue((bed == bed2).all(), style)
+
+    def test_silent_scene_is_silent_and_seed_changes_output(self):
+        import score
+        bed, _ = score.render('warm', self.SC, [.3, 0.0, .5, .3], 28)
+        loud = float(abs(bed[int(0 * score.SR):int(6 * score.SR)]).max()); tail = float(abs(bed[int(10 * score.SR):int(13.5 * score.SR)]).max())
+        self.assertLess(tail, loud * .12)  # previous scene's reverb tail has decayed; no new notes in the silent scene
+        a, _ = score.render('warm', self.SC, [.5] * 4, 28, seed=1); b, _ = score.render('warm', self.SC, [.5] * 4, 28, seed=2)
+        self.assertFalse((a == b).all())
+
+    def test_style_pick_and_key_parse(self):
+        import score
+        self.assertEqual(score.pick_style('auto', 'documentary'), 'cinematic'); self.assertEqual(score.pick_style('auto', None), 'warm')
+        self.assertEqual(score.parse_key('D minor'), ('D', 'minor')); self.assertEqual(score.parse_key(None), (None, None))
+        with self.assertRaises(ValueError): score.pick_style('nope')
+        with self.assertRaises(ValueError): score.parse_key('D weird')
+
+    def test_lint_checks_music_config(self):
+        import lint
+        with tempfile.TemporaryDirectory() as t:
+            d = proj(t, music={'style': 'warm'}); p = json.loads((d / 'project.json').read_text(encoding='utf-8'))
+            self.assertIn('mood', {i['kind'] for i in lint.check(p, d)})            # untagged -> warn
+            p['scenes'][0]['mood'] = 'epic'; p['music'] = {'style': 'bogus'}
+            kinds = [i['kind'] for i in lint.check(p, d) if i['level'] == 'error']
+            self.assertIn('music', kinds); self.assertIn('mood', kinds)
+            p['music'] = {'style': 'warm'}; p['scenes'][0]['mood'] = 'calm'; p['scenes'][1]['energy'] = .8
+            self.assertEqual([i for i in lint.check(p, d) if i['level'] == 'error' or i['kind'] == 'mood'], [])
+
+    def test_audio_script_writes_score_report(self):
+        import audio, score, wave
+        with tempfile.TemporaryDirectory() as t:
+            d = proj(t, music={'style': 'auto'}, route='documentary'); d.joinpath('audio').mkdir()
+            tl = {'duration': 14.0, 'scenes': [{'id': 's01', 'ns': 0, 'nd': 6, 'speed': 1.0, 'voStart': .45, 'voDur': 0}, {'id': 's02', 'ns': 6, 'nd': 8, 'speed': 1.0, 'voStart': .45, 'voDur': 0}], 'subs': []}
+            d.joinpath('timeline.json').write_text(json.dumps(tl), encoding='utf-8')
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'audio.py'), str(d)], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(r.returncode, 0, r.stderr); rep = json.loads((d / 'audio' / 'score_report.json').read_text(encoding='utf-8'))
+            self.assertEqual(rep['style'], 'cinematic'); self.assertTrue((d / 'audio' / 'mix.wav').exists())
+
+
 if __name__ == '__main__': unittest.main()

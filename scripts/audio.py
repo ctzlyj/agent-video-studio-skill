@@ -1,12 +1,15 @@
 """Music bed + sfx + narration mix, following the (speed-mapped) timeline.
-music: {"file": "assets/music.mp3"} (licensed track) | {"generate": "ambient"|"pulse"|"none"}
+music: {"style": "auto"|"warm"|"bright"|"tech"|"cinematic"|"ambient"|"suspense", "bpm": 90, "key": "D minor", "seed": 7}
+         mood-driven score that follows each scene's "mood"/"energy" (see scripts/score.py)
+       {"file": "assets/music.mp3"} (licensed track) | {"generate": "ambient"|"pulse"|"none"} (legacy plain bed)
 sfx in scenes: "sfx": [[0.8, "tick"], [3.2, "ok"]]  (scene-local 1x seconds)
 """
 from __future__ import annotations
 import argparse, os, sys, wave
 import numpy as np
 sys.path.insert(0, os.path.dirname(__file__))
-from avs_common import project_dir, load_json, ffmpeg, run
+from avs_common import project_dir, load_json, save_json, ffmpeg, run
+import score as scoremod
 
 SR = 48000
 def _env(x, a=.01, r=.4): return np.minimum(1, x / a) * np.exp(-x / r)
@@ -35,14 +38,25 @@ def sfx_wave(kind, rng):
     if kind == 'alert': tt = np.arange(int(.75 * SR)) / SR; return np.sin(2 * np.pi * (440 + 80 * np.sin(2 * np.pi * 8 * tt)) * tt) * _env(tt, .01, .25), .11
     if kind == 'whoosh': tt = np.arange(int(.55 * SR)) / SR; y = np.convolve(rng.normal(0, 1, len(tt)), np.ones(80) / 80, 'same') * np.sin(np.pi * tt / .55); return y, .08
     if kind == 'boom': tt = np.arange(int(1.2 * SR)) / SR; return np.sin(2 * np.pi * (60 + 40 * np.exp(-tt * 6)) * tt) * _env(tt, .005, .5), .2
+    if kind == 'pop': tt = np.arange(int(.14 * SR)) / SR; return np.sin(2 * np.pi * (300 + 700 * np.exp(-tt * 40)) * tt) * _env(tt, .001, .04), .16
+    if kind == 'click': tt = np.arange(int(.05 * SR)) / SR; return np.convolve(rng.normal(0, 1, len(tt)), np.array([1, -1]), 'same') * _env(tt, .0005, .008), .12
+    if kind == 'swell': tt = np.arange(int(1.4 * SR)) / SR; return np.sin(2 * np.pi * 220 * tt) * np.sin(np.pi * tt / 1.4) ** 2 * .6, .09
     raise ValueError(f'unknown sfx {kind}')
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('project', nargs='?'); a = ap.parse_args()
     d = project_dir(a.project); p = load_json(d / 'project.json'); tl = load_json(d / 'timeline.json'); dur = tl['duration']
     ad = d / 'audio'; ad.mkdir(exist_ok=True); m = p.get('music') or {'generate': 'ambient'}; rng = np.random.default_rng(3)
-    bed = music_bed(m.get('generate', 'ambient') if not m.get('file') else 'none', dur)
     scenes = {s['id']: s for s in p['scenes']}
+    if m.get('file'): bed = music_bed('none', dur)
+    elif m.get('style'):
+        style = scoremod.pick_style(m['style'], p.get('route')); tonic, mode = scoremod.parse_key(m.get('key'))
+        en = scoremod.energies_for([scenes[s['id']] for s in tl['scenes']])
+        bed, info = scoremod.render(style, tl['scenes'], en, dur, bpm=m.get('bpm'), tonic=tonic, mode=mode, seed=int(m.get('seed', 7)))
+        rep = scoremod.analyze(bed, tl['scenes'], en); rep.update(info); rep['sceneIds'] = [s['id'] for s in tl['scenes']]; save_json(ad / 'score_report.json', rep)
+        print(f"score: {style} {info['bpm']:.0f} bpm, {info['chords']} chord changes, energy {[round(x, 2) for x in en]}, scene dB {rep['sceneRmsDb']}")
+        if not (rep['noClip'] and rep['arcOk']): print(f"WARN score check: noClip={rep['noClip']} arcOk={rep['arcOk']} ({rep['arcNote']})")
+    else: bed = music_bed(m.get('generate', 'ambient'), dur)
     for s in tl['scenes']:
         cues = list(scenes[s['id']].get('sfx') or [])
         if (p.get('sfx') or {}).get('transitions', True) and s['ns'] > 0: cues.append([0.02, 'whoosh'])

@@ -18,7 +18,7 @@ suihe1/short-drama-production 与 xixihhhh/ai-short-drama-skill（剧本→分�
 5. **报价 → 确认 → 提交**：⚠️ `lingjing model quote` 对 Seedance 2.5 参考生视频只按"清晰度×时长"报价，实际账单按 token 计（2026-11-07 实测：720p 15s 报价 13.61 元，实账 324.9 千 token × 0.07 = 22.74 元，约 1.67 倍）。报价给用户时写明"报价 X 元，按实测实际约 1.7X 元"，用户授权以较高金额为准；交付后用 `lingjing usage show <taskId>` 核对实扣并如实报告。
    原步骤：`lingjing model quote` 报出每段价格和总价，告诉用户段数、时长、清晰度、总金额，得到确认后才 `node run -y`。先用 480p 样片试一段（`lingjing` 的样片→正片流程）再批量出 1080p，可省钱。
 6. **质检**：每段抽帧看人物是否一致、有无变形/多手指/穿帮、口型和动作是否合理、是否出现文字水印。不合格只重跑该段（同节点 `--attempt 2`），重跑前再报价。
-7. **声音与合成**：配音（每角色固定音色）、配乐、音效；字幕。片段拼接用 `lingjing clip concat` 写回画布 `video-clip`，或把片段作为 `videos` 素材放进本 skill 的 HTML 工程，加片头、字幕、署名后统一 `build.py --final`。
+7. **声音与合成**：配音（每角色固定音色）、配乐（用 `music.style` 并按剧情给每段标 `mood`，见 `references/music.md`）、音效；字幕。片段拼接用 `lingjing clip concat` 写回画布 `video-clip`，或把片段作为 `videos` 素材放进本 skill 的 HTML 工程，加片头、字幕、署名后统一 `build.py --final`。
 8. **交付**：成片、每段任务 ID 与费用合计、未通过质检被替换的段、灵境画布链接。
 
 ## 真人短剧的审核限制

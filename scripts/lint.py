@@ -45,9 +45,19 @@ def check(project, root: Path):
         src = v.get('src', '') if isinstance(v, dict) else v
         if ABS.match(src): add('error', 'abs_path', f'videos.{name}', f'absolute path "{src}"')
         elif not (root / src).exists(): add('error', 'missing_asset', f'videos.{name}', f'file not found: {src}')
-    for k in ('file',):
-        f = (project.get('music') or {}).get(k)
-        if f and not (root / f).exists(): add('error', 'missing_asset', 'music', f'file not found: {f}')
+    music = project.get('music') or {}
+    f = music.get('file')
+    if f and ABS.match(f): add('error', 'abs_path', 'music', f'absolute path "{f}"')
+    elif f and not (root / f).exists(): add('error', 'missing_asset', 'music', f'file not found: {f}')
+    if music.get('style'):
+        import score
+        try: score.pick_style(music['style'], project.get('route')); score.parse_key(music.get('key'))
+        except ValueError as e: add('error', 'music', 'music', str(e))
+        for sc in project.get('scenes', []):
+            if sc.get('mood') and sc['mood'] not in score.MOODS: add('error', 'mood', sc.get('id', '?'), f'mood "{sc["mood"]}" not in ' + '/'.join(score.MOODS))
+            if sc.get('energy') is not None and not 0 <= float(sc['energy']) <= 1: add('error', 'mood', sc.get('id', '?'), 'energy must be 0-1')
+        if not any(sc.get('mood') or sc.get('energy') is not None for sc in project.get('scenes', [])):
+            add('warn', 'mood', 'scenes', 'no scene has "mood"/"energy"; the score will follow a default intro-build-climax-outro arc. Tag each scene so the music matches the story')
     for f in ('scenes.js', 'index.html'):
         p = root / f
         if p.exists():

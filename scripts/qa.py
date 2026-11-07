@@ -20,6 +20,9 @@ def main():
         v = subprocess.run([ff, '-hide_banner', '-i', str(f), '-af', 'volumedetect', '-vn', '-f', 'null', '-'], capture_output=True, text=True, encoding='utf-8', errors='ignore').stderr
         mean = float(re.search(r'mean_volume: ([-\d.]+)', v)[1]); peak = float(re.search(r'max_volume: ([-\d.]+)', v)[1])
         chk('loudness', -24 < mean < -9 and peak <= -0.1, f'mean {mean} dB, peak {peak} dB')
+    sr = d / 'audio' / 'score_report.json'
+    if sr.exists():
+        r = load_json(sr); chk('score: no clipping, energy arc audible', r.get('noClip') and r.get('arcOk'), f"{r.get('style')} {r.get('bpm'):.0f} bpm; {r.get('arcNote')}")
     bd = subprocess.run([ff, '-hide_banner', '-i', str(f), '-vf', 'blackdetect=d=0.8:pix_th=0.06', '-an', '-f', 'null', '-'], capture_output=True, text=True, encoding='utf-8', errors='ignore').stderr
     blacks = re.findall(r'black_start:([\d.]+) black_end:([\d.]+)', bd)
     mid = [(float(s), float(e)) for s, e in blacks if float(s) > 0.5 and float(e) < dur - 0.5]

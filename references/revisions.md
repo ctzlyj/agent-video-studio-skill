@@ -14,5 +14,6 @@
 | 字幕挡住了 / 和画面字重复 | 调 `#sub` 位置或删屏幕上的同句文字 |
 | 换个声音 / 读错了 | `voice.voice` 换音色；读错的词加进 `voice.pronounce` |
 | 不要背景音乐 / 换音乐 | `music.generate: "none"` 或 `music.file` 指向有授权的音乐 |
+| 音乐太吵 / 太平 / 太快 / 想换风格 | 见 `references/music.md` 的「改音乐的大白话」（改 `mood`、`style`、`bpm`、`key`、`seed`） |
 
 每次改完在回复里列：改了哪些镜头、新时长、QA 结果。
