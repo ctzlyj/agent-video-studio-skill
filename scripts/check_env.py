@@ -1,0 +1,48 @@
+"""Check (and optionally install) everything the skill needs. Works on Windows and macOS.
+Usage: python scripts/check_env.py [--install]
+"""
+from __future__ import annotations
+import argparse, importlib, os, shutil, subprocess, sys
+sys.path.insert(0, os.path.dirname(__file__))
+from avs_common import SYSTEM
+
+PKGS = {'playwright': 'playwright', 'edge_tts': 'edge-tts', 'PIL': 'pillow', 'numpy': 'numpy', 'requests': 'requests', 'imageio_ffmpeg': 'imageio-ffmpeg', 'faster_whisper': 'faster-whisper'}
+
+def has(mod):
+    try: importlib.import_module(mod); return True
+    except Exception: return False
+
+def main():
+    ap = argparse.ArgumentParser(); ap.add_argument('--install', action='store_true'); a = ap.parse_args()
+    rows, ok = [], True
+    rows.append(('python', sys.version.split()[0], sys.version_info >= (3, 9)))
+    missing = [pip for mod, pip in PKGS.items() if not has(mod)]
+    if missing and a.install:
+        subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', *missing], check=False)
+        missing = [pip for mod, pip in PKGS.items() if not has(mod)]
+    for mod, pip in PKGS.items(): rows.append((pip, 'ok' if has(mod) else 'MISSING', has(mod)))
+    chromium = False
+    if has('playwright'):
+        try:
+            from playwright.sync_api import sync_playwright
+            with sync_playwright() as p: b = p.chromium.launch(); b.close(); chromium = True
+        except Exception:
+            if a.install:
+                subprocess.run([sys.executable, '-m', 'playwright', 'install', 'chromium'], check=False); chromium = True
+    rows.append(('chromium (playwright)', 'ok' if chromium else 'MISSING -> python -m playwright install chromium', chromium))
+    try:
+        from avs_common import ffmpeg; ff = ffmpeg(); rows.append(('ffmpeg', ff, True))
+    except SystemExit: rows.append(('ffmpeg', 'MISSING', False))
+    key = bool(os.environ.get('JD_LLM_API_KEY') or os.environ.get('AVS_IMAGE_API_KEY'))
+    rows.append(('image gateway key (JD_LLM_API_KEY / AVS_IMAGE_API_KEY)', 'set' if key else 'not set (image generation disabled)', True))
+    lj = shutil.which('lingjing') or next((p for p in [os.path.expanduser('~/.lingjing/bin/lingjing'), os.path.expanduser('~/.lingjing/bin/lingjing.exe')] if os.path.exists(p)), None)
+    rows.append(('lingjing CLI (AI drama routes only)', lj or 'not installed (optional)', True))
+    offline = 'say (macOS)' if SYSTEM == 'Darwin' else ('SAPI (Windows)' if SYSTEM == 'Windows' else 'espeak if installed')
+    rows.append(('offline TTS fallback', offline, True))
+    for name, val, good in rows:
+        ok &= good; print(f"{'OK ' if good else 'XX '} {name}: {val}")
+    print('\nREADY' if ok else '\nNOT READY - rerun with --install')
+    sys.exit(0 if ok else 1)
+
+if __name__ == '__main__': main()
+

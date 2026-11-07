@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.DS_Store
+# project outputs never belong in the skill
+out/
+qa/
+_frames/
+*.mp4
+*.wav

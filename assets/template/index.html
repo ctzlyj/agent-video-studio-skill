@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>AVS</title>
+<style>
+html,body{margin:0;overflow:hidden;background:#000}
+#stage{position:absolute;inset:0;overflow:hidden}
+.avs-scene{position:absolute;inset:0;visibility:hidden;opacity:0;overflow:hidden}
+#sub{position:absolute;left:50%;transform:translateX(-50%);text-align:center;white-space:nowrap;z-index:100;pointer-events:none}
+</style>
+<link rel="stylesheet" href="style.css">
+</head><body><div id="stage"></div><div id="sub"></div>
+<script src="timeline.js"></script><script src="project.js"></script><script src="videos.js"></script>
+<script src="avs-runtime.js"></script><script src="scenes.js"></script>
+<script>document.documentElement.style.cssText+=`;width:${TL.width}px;height:${TL.height}px`;document.body.style.cssText+=`;width:${TL.width}px;height:${TL.height}px`</script>
+</body></html>

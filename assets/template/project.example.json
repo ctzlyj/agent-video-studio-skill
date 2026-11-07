@@ -1,0 +1,15 @@
+{
+  "title": "未命名视频",
+  "route": "promo",
+  "format": {"width": 1920, "height": 1080, "fps": 30, "aspect": "16:9"},
+  "brand": {"terms": {}, "banned": [], "credit": ""},
+  "voice": {"engine": "edge", "voice": "zh-CN-YunxiNeural", "rate": "+0%", "pitch": "+0Hz", "pronounce": {}},
+  "subtitles": {"enabled": true, "replace": {}},
+  "music": {"generate": "ambient"},
+  "sfx": {"transitions": true},
+  "videos": {},
+  "scenes": [
+    {"id": "s01", "type": "title", "vo": "这是第一个镜头的旁白。", "speed": 1.0, "data": {"title": "标题", "subtitle": "副标题"}},
+    {"id": "s02", "type": "bullets", "vo": "这里列出三个要点。", "speed": 1.0, "data": {"heading": "三个要点", "items": ["要点一", "要点二", "要点三"]}}
+  ]
+}
