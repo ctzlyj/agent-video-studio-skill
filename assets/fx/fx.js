@@ -22,11 +22,17 @@
   uniform float flash;     // white flash
   uniform float sat;       // saturation multiplier
   uniform float streak;    // anamorphic streak strength
+  uniform float edge;      // x (0..1) of the cold|warm boundary; <-5 disables (global 'warm' is used)
+  uniform float edgeSoft;  // softness of that boundary
+  uniform float mblur;     // horizontal motion blur in px (camera speed)
+  uniform float expo;      // exposure multiplier
+  vec2 px0 = vec2(0.);
   float h(vec2 p){ return fract(sin(dot(p, vec2(127.1,311.7)))*43758.5453); }
   float n(vec2 p){ vec2 i=floor(p),f=fract(p); f=f*f*(3.-2.*f); return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y); }
-  vec3 S(vec2 u){ return texture(src, clamp(u, vec2(0.001), vec2(.999))).rgb; }
+  vec3 S0(vec2 u){ return texture(src, clamp(u, vec2(0.001), vec2(.999))).rgb; }
+  vec3 S(vec2 u){ return S0(u); }
   void main(){
-    vec2 u = uv; vec2 px = 1./R;
+    px0 = 1./R; vec2 u = uv; vec2 px = 1./R;
     // screen shake (deterministic from t)
     u += vec2(sin(t*91.)+sin(t*53.+1.), cos(t*77.)+cos(t*61.+2.)) * .5 * shake * px;
     // glitch: horizontal slice displacement
@@ -38,21 +44,23 @@
     // chromatic aberration (radial)
     vec2 d = (u-.5); float r2 = dot(d,d);
     vec2 off = d * (ca*px.x*1.0) * (.4 + r2*3.);
-    vec3 c = vec3(S(u+off).r, S(u).g, S(u-off).b);
+    vec3 c;
+    if (mblur > .5) { vec3 a = vec3(0.); float tw = 0.; for (int i=-4;i<=4;i++){ float w = 1.-abs(float(i))/5.; vec2 uu = u + vec2(float(i)*mblur/4.*px.x, 0.); a += vec3(S0(uu+off).r, S0(uu).g, S0(uu-off).b)*w; tw += w; } c = a/tw; }
+    else c = vec3(S(u+off).r, S(u).g, S(u-off).b);
     // bloom: 12-tap golden-angle disc, two radii
     vec3 b = vec3(0.); float tw = 0.;
-    for (int i=0;i<12;i++){
-      float a = float(i)*2.39996; float rr = sqrt(float(i)+.5)/3.4;
+    if (bloom > .01) for (int i=0;i<8;i++){
+      float a = float(i)*2.39996; float rr = sqrt(float(i)+.5)/2.9;
       vec2 o1 = vec2(cos(a),sin(a))*rr*px*34.;
       vec3 s1 = S(u+o1); vec3 s2 = S(u+o1*2.6);
       s1 = max(s1-.55, 0.); s2 = max(s2-.5, 0.);
       b += s1*1.0 + s2*.8; tw += 1.8;
     }
-    b /= tw; c += b * bloom * 2.6;
+    if (tw > 0.) { b /= tw; c += b * bloom * 3.2; }
     // anamorphic horizontal streak (bright pixels smear sideways)
     if (streak > 0.){
       vec3 sk = vec3(0.);
-      for (int i=-8;i<=8;i++){ float w = exp(-abs(float(i))*.28); sk += max(S(u+vec2(float(i)*px.x*26., 0.))-.62, 0.)*w; }
+      for (int i=-4;i<=4;i++){ float w = exp(-abs(float(i))*.5); sk += max(S(u+vec2(float(i)*px.x*52., 0.))-.62, 0.)*w; }
       c += sk * streak * vec3(.55,.75,1.) * .22;
     }
     // light sweep: diagonal warm band wiping across, revealing via additive glow
@@ -64,7 +72,10 @@
     float L = dot(c, vec3(.299,.587,.114));
     vec3 cold = mix(vec3(L), c, .55) * vec3(.82,.95,1.12);
     vec3 warmc = c * vec3(1.08,1.0,.86) + vec3(.02,.01,0.);
-    c = mix(cold, warmc, warm);
+    float wv = warm;
+    if (edge > -5.) wv = 1. - smoothstep(edge - edgeSoft, edge + edgeSoft, uv.x);   // cold on the right of the edge, warm on the left (edge sweeps left->right)
+    c = mix(cold, warmc, wv);
+    c *= expo;
     c = mix(vec3(dot(c,vec3(.299,.587,.114))), c, sat);
     // filmic curve
     c = c/(c+vec3(.66)) * 1.62;
@@ -83,14 +94,14 @@
   const tex = gl.createTexture(); gl.bindTexture(gl.TEXTURE_2D, tex);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE); gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  const U = {}; for (const k of ['src','R','t','warm','ca','bloom','sweep','glitch','shake','vig','flash','sat','streak']) U[k] = gl.getUniformLocation(pr, k);
+  const U = {}; for (const k of ['src','R','t','warm','ca','bloom','sweep','glitch','shake','vig','flash','sat','streak','edge','edgeSoft','mblur','expo']) U[k] = gl.getUniformLocation(pr, k);
   gl.uniform1i(U.src, 0); gl.uniform2f(U.R, W, H); gl.viewport(0, 0, W, H);
-  const D = { warm: .5, ca: 0, bloom: .35, sweep: -1, glitch: 0, shake: 0, vig: .55, flash: 0, sat: 1, streak: 0 };
+  const D = { warm: .5, ca: 0, bloom: .35, sweep: -1, glitch: 0, shake: 0, vig: .55, flash: 0, sat: 1, streak: 0, edge: -10, edgeSoft: .06, mblur: 0, expo: 1 };
   function apply(srcCanvas, t, o) {
     const v = Object.assign({}, D, o || {});
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, srcCanvas);
-    gl.uniform1f(U.t, t); for (const k of ['warm','ca','bloom','sweep','glitch','shake','vig','flash','sat','streak']) gl.uniform1f(U[k], v[k]);
+    gl.uniform1f(U.t, t); for (const k of ['warm','ca','bloom','sweep','glitch','shake','vig','flash','sat','streak','edge','edgeSoft','mblur','expo']) gl.uniform1f(U[k], v[k]);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
   window.FX = { canvas: cv, apply, W, H };

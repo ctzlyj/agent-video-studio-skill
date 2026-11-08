@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from avs_common import project_dir, load_json, save_json, ffmpeg, media_duration
 
 TOL_LU = 0.7; MAX_TP = -1.0
+PRE_AAC_TP = -2.6   # AAC encoding overshoots the pre-encode true peak by up to ~1.3 dB, so normalise to a lower ceiling and verify afterwards
 
 def _run(cmd): return subprocess.run([str(c) for c in cmd], capture_output=True, text=True, encoding='utf-8', errors='ignore')
 
@@ -29,19 +30,28 @@ def measure(ff, f):
     if not i: raise RuntimeError('cannot measure loudness (no audio?)')
     return float(i[1]), (float(p[1]) if p else 0.0)
 
-def normalise_audio(ff, src, dst, target, tmp):
-    """Two-pass loudnorm on the audio of src -> aac in dst (video copied)."""
-    r = _run([ff, '-hide_banner', '-nostats', '-i', src, '-vn', '-af', f'loudnorm=I={target}:TP=-1.5:LRA=11:print_format=json', '-f', 'null', '-']).stderr
+def normalise_audio(ff, src, dst, target, tmp, tp=PRE_AAC_TP):
+    """Two-pass loudnorm on the audio of src -> aac in dst (video copied). tp is the ceiling BEFORE the AAC encode."""
+    r = _run([ff, '-hide_banner', '-nostats', '-i', src, '-vn', '-af', f'loudnorm=I={target}:TP={tp}:LRA=11:print_format=json', '-f', 'null', '-']).stderr
     m = re.search(r'\{[^{}]*"input_i"[^{}]*\}', r, re.S)
     if not m: raise RuntimeError('loudnorm analysis failed')
     j = json.loads(m[0])
-    af = (f"loudnorm=I={target}:TP=-1.5:LRA=11:measured_I={j['input_i']}:measured_TP={j['input_tp']}:measured_LRA={j['input_lra']}"
+    af = (f"loudnorm=I={target}:TP={tp}:LRA=11:measured_I={j['input_i']}:measured_TP={j['input_tp']}:measured_LRA={j['input_lra']}"
           f":measured_thresh={j['input_thresh']}:offset={j['target_offset']}:linear=true")
     wav = Path(tmp) / 'norm.wav'
     p = _run([ff, '-y', '-hide_banner', '-loglevel', 'error', '-i', src, '-vn', '-af', af, '-ar', '48000', '-ac', '2', wav])
     if p.returncode: raise RuntimeError(p.stderr[-300:])
     p = _run([ff, '-y', '-hide_banner', '-loglevel', 'error', '-i', src, '-i', wav, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', '-movflags', '+faststart', dst])
     if p.returncode: raise RuntimeError(p.stderr[-300:])
+
+def normalise_to_limit(ff, src, dst, target, tmp, max_tp=MAX_TP, steps=(PRE_AAC_TP, -3.6, -4.8, -6.0)):
+    """Normalise, encode to AAC, MEASURE the encoded file, and if its true peak is over max_tp retry with a lower pre-encode ceiling.
+    Returns (integrated LUFS, true peak dBTP, ceiling used). Loudness may drop a little on the retry; the caller checks it against the tolerance."""
+    last = None
+    for tp in steps:
+        normalise_audio(ff, src, dst, target, tmp, tp=tp); li, pk = measure(ff, dst); last = (li, pk, tp)
+        if pk <= max_tp: return last
+    return last
 
 def decode_errors(ff, f):
     r = _run([ff, '-v', 'error', '-i', f, '-f', 'null', '-'])
@@ -76,8 +86,8 @@ def main():
     rep = {'source': src.name, 'targetLUFS': a.lufs, 'checks': []}
     def chk(name, ok, detail): rep['checks'].append({'name': name, 'ok': bool(ok), 'detail': detail})
     with tempfile.TemporaryDirectory(prefix='avs_fin_') as tmp:
-        master = Path(tmp) / 'master.mp4'; normalise_audio(ff, src, master, a.lufs, tmp)
-        li, tp = measure(ff, master); chk('integrated loudness', abs(li - a.lufs) <= TOL_LU, f'{li:.1f} LUFS (target {a.lufs} +-{TOL_LU})'); chk('true peak', tp <= MAX_TP, f'{tp:.1f} dBTP (max {MAX_TP})')
+        master = Path(tmp) / 'master.mp4'; li, tp, used = normalise_to_limit(ff, src, master, a.lufs, tmp); rep['preEncodeCeiling'] = used
+        chk('integrated loudness', abs(li - a.lufs) <= TOL_LU, f'{li:.1f} LUFS (target {a.lufs} +-{TOL_LU})'); chk('true peak', tp <= MAX_TP, f'{tp:.1f} dBTP (max {MAX_TP})')
         errs = decode_errors(ff, master); chk('full decode', not errs, 'no errors' if not errs else f'{len(errs)} error line(s): {errs[:2]}')
         dur = media_duration(master); chk('duration', abs(dur - tl['duration']) < 0.5, f'{dur:.2f}s vs timeline {tl["duration"]:.2f}s')
         blacks, freezes = events(ff, master); mid = [b for b in blacks if b[0] > 0.5 and b[1] < dur - 0.5]
@@ -89,7 +99,7 @@ def main():
                 nob = Path(tmp) / 'nobgm.mp4'; vs_norm = Path(tmp) / 'vs_norm.mp4'
                 p1 = _run([ff, '-y', '-hide_banner', '-loglevel', 'error', '-i', src, '-i', vs, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k', '-shortest', vs_norm])
                 if p1.returncode == 0:
-                    normalise_audio(ff, vs_norm, nob, a.lufs, tmp); l2, t2 = measure(ff, nob); chk('no-BGM version loudness / peak', abs(l2 - a.lufs) <= 1.5 and t2 <= MAX_TP, f'{l2:.1f} LUFS, {t2:.1f} dBTP')
+                    l2, t2, _ = normalise_to_limit(ff, vs_norm, nob, a.lufs, tmp); chk('no-BGM version loudness / peak', abs(l2 - a.lufs) <= 1.5 and t2 <= MAX_TP, f'{l2:.1f} LUFS, {t2:.1f} dBTP')
                 else: nob = None; chk('no-BGM version', False, p1.stderr[-200:])
             else: rep['noBgmVersion'] = 'skipped: audio/vo_sfx.wav missing (run build.py --final again)'
         rep['pass'] = all(c['ok'] for c in rep['checks'])

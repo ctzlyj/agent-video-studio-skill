@@ -296,4 +296,30 @@ class PreviewScaleTest(unittest.TestCase):
         self.assertEqual((round(1080 * render.preview_scale(1080, 1920)), round(1920 * render.preview_scale(1080, 1920))), (540, 960))
 
 
+class TruePeakAfterAacTest(unittest.TestCase):
+    def test_pre_aac_ceiling_leaves_headroom_for_encoder_overshoot(self):
+        """Regression (2026-11 film): loudnorm held TP at -1.5 in the WAV, but AAC pushed it to -0.3 dBTP and finalize.py (rightly) rejected the film.
+        The ceiling before the encode must therefore be at least ~1 dB lower than the delivery limit."""
+        import finalize
+        self.assertLessEqual(finalize.PRE_AAC_TP, finalize.MAX_TP - 1.0)
+
+    def test_dense_transients_stay_under_limit_after_aac(self):
+        import finalize, wave, numpy as np
+        from avs_common import ffmpeg
+        ff = ffmpeg(); sr = 48000
+        with tempfile.TemporaryDirectory() as t:
+            rng = np.random.default_rng(5); n = sr * 10; x = .08 * np.sin(2 * np.pi * 330 * np.arange(n) / sr)
+            for s in range(0, n - 2400, int(sr * .35)):                      # dense broadband bursts every 0.35 s: many sample peaks inside each AAC frame
+                x[s:s + 2400] += rng.uniform(-.9, .9, 2400) * np.hanning(2400)
+            x = np.clip(x, -.99, .99); wav = Path(t) / 'in.wav'
+            with wave.open(str(wav), 'wb') as w:
+                w.setnchannels(2); w.setsampwidth(2); w.setframerate(sr); w.writeframes((np.repeat(x[:, None], 2, axis=1) * 32767).astype('<i2').tobytes())
+            src = Path(t) / 'in.mp4'
+            r = subprocess.run([ff, '-y', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=160x90:d=10:r=10', '-i', str(wav), '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '256k', '-shortest', str(src)], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            out = Path(t) / 'out.mp4'; li, tp, used = finalize.normalise_to_limit(ff, src, out, -16.0, t)
+            self.assertLessEqual(tp, finalize.MAX_TP, f'true peak {tp} dBTP after AAC (ceiling used {used})')
+            self.assertLess(abs(li + 16.0), 2.0)
+
+
 if __name__ == '__main__': unittest.main()

@@ -2,7 +2,8 @@
    then handed to FX (WebGL) for post. Everything is a pure function of (t, lt). */
 (function () {
   const { FMT, E, seg, lerp, clamp, rand } = AVS; const W = FMT.w, H = FMT.h;
-  const C = document.createElement('canvas'); C.width = W; C.height = H; const X = C.getContext('2d');
+  const C = document.createElement('canvas'); C.width = W; C.height = H; const X0 = C.getContext('2d'); let X = X0;   // X can be swapped to draw text on a sharp overlay canvas (L.useCtx)
+  function useCtx(c) { X = c || X0; if (window.L) window.L.X = X }
   const IMG = {};  // name -> HTMLImageElement
   const load = names => Promise.all(names.map(n => new Promise(r => { const i = new Image(); i.onload = () => i.decode().then(r, r); i.onerror = r; i.src = `assets/gen/${n}.png`; IMG[n] = i })));
   const tau = Math.PI * 2;
@@ -18,8 +19,9 @@
     X.save(); X.globalCompositeOperation = 'lighter'; X.fillStyle = g; X.fillRect(x - r, y - r, r * 2, r * 2); X.restore();
   }
   function text(str, x, y, o = {}) {
-    const { size = 90, weight = 900, fam = 'var(--serif)', col = '#FFF4DC', a = 1, align = 'center', ls = 0, glow: gl = 0, glowCol = 'rgba(255,200,87,.9)', stroke = 0, sc = 1, rot = 0, blur = 0, skew = 0 } = o;
-    X.save(); X.globalAlpha = a; X.translate(x, y); if (rot) X.rotate(rot); if (sc !== 1 || skew) X.transform(sc, 0, skew, sc, 0, 0);
+    const { size = 90, weight = 900, fam = 'var(--serif)', col = '#FFF4DC', a = 1, align = 'center', ls = 0, glow: gl = 0, glowCol = 'rgba(255,200,87,.9)', stroke = 0, sc = 1, rot = 0, blur = 0, skew = 0, local = false } = o;
+    X.save(); X.globalAlpha = a; /* default: draw under the CURRENT transform (inside the camera the text lives in the world); screen:true = glued to the screen */
+    if (o.screen) X.setTransform(1, 0, 0, 1, 0, 0); X.translate(x, y); if (rot) X.rotate(rot); if (sc !== 1 || skew) X.transform(sc, 0, skew, sc, 0, 0);
     const family = fam.startsWith('var(') ? getComputedStyle(document.body).getPropertyValue(fam.slice(4, -1)) : fam;
     X.font = `${weight} ${size}px ${family}`; X.textAlign = align; X.textBaseline = 'middle'; if ('letterSpacing' in X) X.letterSpacing = ls + 'px';
     if (blur) X.filter = `blur(${blur}px)`;
@@ -53,5 +55,5 @@
     }
     X.restore();
   }
-  window.L = { C, X, W, H, IMG, load, plate, glow, text, measure, line, rect, dim, particles, tau };
+  window.L = { C, X, useCtx, W, H, IMG, load, plate, glow, text, measure, line, rect, dim, particles, tau };
 })();

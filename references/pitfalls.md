@@ -24,3 +24,6 @@
 | 无头渲染报 `no scene renderer`，但脚本语法没错 | 静态服务器是单线程，浏览器并发请求多个脚本时被卡死 | `render.py` 已改为多线程服务器并忽略连接重置 |
 | 竖屏预览报 `height not divisible by 2` | 按宽度缩放到 960 会得到奇数高度（960x1707） | `render.py` 的 `preview_scale` 按长边缩放并保证偶数尺寸（540x960） |
 | 淡入淡出重叠时粒子/光变亮 | 每个可见镜头各画一次全局效果 | 全局效果每帧只画一次（见 `assets/fx` 的用法） |
+| `finalize.py` 报真峰值超限（如 -0.3 dBTP），而混音 WAV 里是 -1.5 | AAC 编码会让真峰值比编码前高约 1 dB | `finalize.py` 现在编码前把上限压到 -2.6 dBTP，并测量编码后的成品；仍超限就自动逐级下调重试（-3.6 / -4.8 / -6.0）；改用更低天花板后响度可能略降，仍须在容差内 |
+| 同时开两个渲染，成片坏掉（`Invalid NAL unit`、前半段是同一帧） | 两个渲染写同一个临时文件 `out/_preview_silent.mp4` / `_final_silent.mp4` | 一个项目同一时间只跑一个渲染；渲染完用 ffmpeg 全片解码检查 |
+| 成片 400+ MB，抖音上传困难 | `render.py` 用 CRF 17 保留母版质量 | 母版留着；投稿用 `ffmpeg -c:v libx264 -crf 23 -preset slow -c:a copy`，1080p/83 秒约 65 MB，肉眼与母版几乎无差别（平均像素差 < 3） |
