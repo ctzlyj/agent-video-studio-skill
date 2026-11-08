@@ -264,4 +264,36 @@ class LintLengthTest(unittest.TestCase):
             self.assertTrue((d / 'audio' / 'vo_sfx.wav').exists()); self.assertTrue((d / 'audio' / 'mix.wav').exists())
 
 
+class SceneVoiceTest(unittest.TestCase):
+    def test_scene_voice_override_changes_hash_and_is_passed_to_engine(self):
+        import voice
+        seen = {}
+        def fake(engine, text, cfg, out):
+            seen[text] = (cfg.get('rate'), cfg.get('pitch')); Path(out).write_bytes(b'x')
+        orig_s, orig_d = voice.synth, voice.media_duration; voice.synth = fake; voice.media_duration = lambda p: 1.0
+        try:
+            with tempfile.TemporaryDirectory() as t:
+                d = proj(t, voice={'engine': 'edge', 'voice': 'v', 'rate': '+0%', 'pitch': '+0Hz'})
+                p = json.loads((d / 'project.json').read_text(encoding='utf-8')); p['scenes'][1]['voiceCfg'] = {'rate': '-10%', 'pitch': '-4Hz'}
+                (d / 'project.json').write_text(json.dumps(p, ensure_ascii=False), encoding='utf-8')
+                old = sys.argv; sys.argv = ['voice.py', str(d)]
+                try: voice.main()
+                finally: sys.argv = old
+                self.assertEqual(seen['第一句，你好。'], ('+0%', '+0Hz')); self.assertEqual(seen['第二句话稍长一点。'], ('-10%', '-4Hz'))
+                h1 = json.loads((d / 'audio' / 'vo' / 's01.json').read_text(encoding='utf-8'))['hash']; h2 = json.loads((d / 'audio' / 'vo' / 's02.json').read_text(encoding='utf-8'))['hash']; self.assertNotEqual(h1, h2)
+        finally: voice.synth, voice.media_duration = orig_s, orig_d
+
+
+class PreviewScaleTest(unittest.TestCase):
+    def test_even_sizes_for_every_supported_format(self):
+        import render
+        for W, H in ((1920, 1080), (1080, 1920), (1080, 1080), (1440, 1080), (1080, 1440)):
+            s = render.preview_scale(W, H)
+            w, h = W * s, H * s
+            self.assertAlmostEqual(w, round(w), 6); self.assertAlmostEqual(h, round(h), 6)
+            self.assertEqual(round(w) % 2, 0, (W, H)); self.assertEqual(round(h) % 2, 0, (W, H)); self.assertLessEqual(max(w, h), 1000)
+        self.assertEqual((round(1920 * render.preview_scale(1920, 1080)), round(1080 * render.preview_scale(1920, 1080))), (960, 540))
+        self.assertEqual((round(1080 * render.preview_scale(1080, 1920)), round(1920 * render.preview_scale(1080, 1920))), (540, 960))
+
+
 if __name__ == '__main__': unittest.main()

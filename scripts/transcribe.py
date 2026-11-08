@@ -1,7 +1,8 @@
 """Transcribe speech with timestamps (local faster-whisper; Windows/macOS/Linux, CPU).
   python scripts/transcribe.py <audio_or_video> [--model small] [--prompt "术语"] [-o out.json]
-Outputs [{"start","end","text"}]. Use it to subtitle generated video dialogue, or to align a user's
-voice-over recording to its script. Install once: pip install faster-whisper
+Outputs [{"start","end","text"}]; with --words each segment also carries "words": [{"w","s","e"}] (word / character
+timestamps). Use it to subtitle generated video dialogue, to align a user's voice-over recording to its script, or to
+pin on-screen events (a number landing, a stamp) to the exact moment the narrator says them. Install once: pip install faster-whisper
 Model download goes through HF_ENDPOINT (defaults to the hf-mirror.com mirror when unset).
 """
 from __future__ import annotations
@@ -17,17 +18,22 @@ def to_pcm(path):
     w = wave.open(str(tmp)); a = np.frombuffer(w.readframes(w.getnframes()), np.int16).astype(np.float32) / 32768; w.close()
     return a  # decoded here (not by PyAV) so it works with any av version
 
-def transcribe(path, model='small', prompt=None, language='zh'):
+def transcribe(path, model='small', prompt=None, language='zh', words=False):
     os.environ.setdefault('HF_ENDPOINT', 'https://hf-mirror.com')
     try: from faster_whisper import WhisperModel
     except ImportError: sys.exit('pip install faster-whisper')
     m = WhisperModel(model, device='cpu', compute_type='int8')
     segs, _ = m.transcribe(to_pcm(path), language=language, word_timestamps=True, vad_filter=False, initial_prompt=prompt)
-    return [{'start': round(s.start, 2), 'end': round(s.end, 2), 'text': s.text.strip()} for s in segs]
+    out = []
+    for s in segs:
+        r = {'start': round(s.start, 2), 'end': round(s.end, 2), 'text': s.text.strip()}
+        if words: r['words'] = [{'w': w.word.strip(), 's': round(w.start, 2), 'e': round(w.end, 2)} for w in (s.words or [])]
+        out.append(r)
+    return out
 
 def main():
-    ap = argparse.ArgumentParser(); ap.add_argument('file'); ap.add_argument('--model', default='small'); ap.add_argument('--prompt'); ap.add_argument('--language', default='zh'); ap.add_argument('-o')
-    a = ap.parse_args(); res = transcribe(a.file, a.model, a.prompt, a.language)
+    ap = argparse.ArgumentParser(); ap.add_argument('file'); ap.add_argument('--model', default='small'); ap.add_argument('--prompt'); ap.add_argument('--language', default='zh'); ap.add_argument('--words', action='store_true', help='include word-level timestamps'); ap.add_argument('-o')
+    a = ap.parse_args(); res = transcribe(a.file, a.model, a.prompt, a.language, a.words)
     txt = json.dumps(res, ensure_ascii=False, indent=1)
     if a.o: Path(a.o).write_text(txt, encoding='utf-8')
     print(txt)

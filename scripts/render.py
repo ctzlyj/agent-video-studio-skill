@@ -19,16 +19,28 @@ def sync_runtime(d: Path):
     (d / 'project.js').write_text('window.PROJECT=' + json.dumps(p, ensure_ascii=False) + ';', encoding='utf-8')
     if not (d / 'videos.js').exists(): (d / 'videos.js').write_text('window.VIDEOS={};', encoding='utf-8')
 
+def preview_scale(W, H, long_side=960):
+    """Device scale so the long side is ~long_side px AND both output sides are even (libx264 rejects odd sizes).
+    Landscape 1920x1080 -> 960x540; portrait 1080x1920 -> 540x960 (a width-based 960 would give 960x1707)."""
+    s = long_side / max(W, H)
+    for k in range(0, 200):
+        for cand in (s - k * .0005, s + k * .0005):
+            if cand > 0 and round(W * cand) % 2 == 0 and round(H * cand) % 2 == 0 and abs(W * cand - round(W * cand)) < 1e-6 and abs(H * cand - round(H * cand)) < 1e-6: return cand
+    return 1.0
+
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
+    def handle(self):  # the browser resets connections it no longer needs; that is not an error
+        try: super().handle()
+        except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError): pass
 
 
 async def _render(d, a):
     from playwright.async_api import async_playwright
     tl = load_json(d / 'timeline.json'); W, H = tl['width'], tl['height']
-    httpd = socketserver.TCPServer(('127.0.0.1', 0), functools.partial(Quiet, directory=str(d))); port = httpd.server_address[1]
+    httpd = socketserver.ThreadingTCPServer(('127.0.0.1', 0), functools.partial(Quiet, directory=str(d))); httpd.daemon_threads = True; port = httpd.server_address[1]  # threaded: the page fetches several scripts at once
     threading.Thread(target=httpd.serve_forever, daemon=True).start()
-    scale = 960 / W if a.preview or a.sheet else 1.0
+    scale = preview_scale(W, H) if a.preview or a.sheet else 1.0
     async with async_playwright() as pw:
         b = await pw.chromium.launch(args=['--disable-gpu-vsync', '--disable-frame-rate-limit', '--force-color-profile=srgb'])
         pg = await b.new_page(viewport={'width': W, 'height': H}, device_scale_factor=scale)

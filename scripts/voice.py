@@ -45,15 +45,15 @@ def main():
         if not text:
             for f in (wav, meta): f.unlink(missing_ok=True)
             continue
-        spoken = _say_text(p, text)
-        h = hashlib.sha1(json.dumps([engine, spoken, cfg.get('voice'), cfg.get('rate'), cfg.get('pitch')], ensure_ascii=False).encode()).hexdigest()[:12]
+        spoken = _say_text(p, text); scfg = {**cfg, **(sc.get('voiceCfg') or {})}   # per-scene override: voice / rate / pitch
+        h = hashlib.sha1(json.dumps([engine, spoken, scfg.get('voice'), scfg.get('rate'), scfg.get('pitch')], ensure_ascii=False).encode()).hexdigest()[:12]
         if a.only and sc['id'] not in a.only: continue
         if engine == 'file':
             if not wav.exists(): sys.exit(f'voice.engine=file but {wav} is missing')
         elif not a.force and meta.exists() and wav.exists() and load_json(meta).get('hash') == h: continue
         else:
             for attempt in range(3):
-                try: synth(engine, spoken, cfg, wav); break
+                try: synth(engine, spoken, scfg, wav); break
                 except SystemExit: raise
                 except Exception as e:
                     if attempt == 2: sys.exit(f"TTS failed for {sc['id']}: {e}. Offline fallback: set voice.engine to {'say' if SYSTEM == 'Darwin' else 'sapi'}")
