@@ -371,4 +371,53 @@ class WorldCameraTest(unittest.TestCase):
         self.assertEqual(r.returncode, 0, r.stderr); self.assertEqual(r.stdout.strip(), 'OK', r.stdout)
 
 
+class SandboxResilienceTest(unittest.TestCase):
+    """Regressions from the macOS run: (1) check_env reported a blocked-but-installed Chromium as MISSING five times in a row;
+    (2) render.py crashed with PermissionError when the sandbox refused to bind a loopback port."""
+    def _status(self, behaviour, install=False):
+        import types, check_env
+        launches = []
+        class Chromium:
+            executable_path = __file__ if behaviour != 'missing' else '/no/such/chrome'
+            def launch(self, **k):
+                launches.append(1)
+                if behaviour == 'blocked': raise Exception('BrowserType.launch: Operation not permitted')
+                if behaviour == 'weird': raise Exception('BrowserType.launch: kaboom happened\nsecond line')
+                return types.SimpleNamespace(close=lambda: None)
+        class P:
+            chromium = Chromium()
+            def __enter__(self): return self
+            def __exit__(self, *a): return False
+        fake = types.ModuleType('playwright.sync_api'); fake.sync_playwright = lambda: P()
+        sys.modules['playwright.sync_api'] = fake; orig_has = check_env.has; check_env.has = lambda m: True
+        try: return check_env.chromium_status(install)
+        finally: check_env.has = orig_has; sys.modules.pop('playwright.sync_api', None)
+
+    def test_chromium_status_distinguishes_ok_blocked_missing_and_other_errors(self):
+        self.assertEqual(self._status('ok'), (True, 'ok'))
+        ok, msg = self._status('blocked'); self.assertTrue(ok); self.assertIn('do not reinstall', msg)
+        ok, msg = self._status('missing'); self.assertFalse(ok); self.assertIn('playwright install chromium', msg)
+        ok, msg = self._status('weird'); self.assertFalse(ok); self.assertIn('kaboom', msg)
+
+    def test_render_falls_back_to_file_url_when_port_bind_is_denied(self):
+        import render, socketserver
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t); (d / 'index.html').write_text('<html></html>', encoding='utf-8')
+            orig = socketserver.ThreadingTCPServer
+            def deny(*a, **k): raise PermissionError(1, 'Operation not permitted')
+            socketserver.ThreadingTCPServer = deny
+            try: httpd, url = render.start_server(d)
+            finally: socketserver.ThreadingTCPServer = orig
+            self.assertIsNone(httpd); self.assertTrue(url.startswith('file:///') or url.startswith('file://'), url); self.assertTrue(url.endswith('index.html'))
+            httpd2, url2 = render.start_server(d)
+            try: self.assertTrue(url2.startswith('http://127.0.0.1:'))
+            finally: httpd2.shutdown()
+
+    def test_browser_launch_help_is_actionable(self):
+        import render
+        self.assertIn('playwright install chromium', render.browser_launch_help(Exception("Executable doesn't exist at /x")))
+        self.assertIn('sandbox', render.browser_launch_help(Exception('launch: Operation not permitted')))
+        self.assertIn('failed to start', render.browser_launch_help(Exception('something else')).lower())
+
+
 if __name__ == '__main__': unittest.main()

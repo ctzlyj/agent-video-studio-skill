@@ -28,6 +28,13 @@ def preview_scale(W, H, long_side=960):
             if cand > 0 and round(W * cand) % 2 == 0 and round(H * cand) % 2 == 0 and abs(W * cand - round(W * cand)) < 1e-6 and abs(H * cand - round(H * cand)) < 1e-6: return cand
     return 1.0
 
+def browser_launch_help(e) -> str:
+    """Turn a raw Playwright launch failure into one actionable line (distinguishes 'not installed' from 'blocked by a sandbox')."""
+    msg = str(e)
+    if "Executable doesn't exist" in msg or 'playwright install' in msg: return 'Chromium is not installed. Run: python -m playwright install chromium'
+    if 'Operation not permitted' in msg or 'Permission denied' in msg or 'sandbox' in msg.lower(): return 'Chromium is installed but the sandbox blocked it from starting. Re-run this command with the sandbox disabled / network-and-process permission granted (it only starts a local headless browser).'
+    return 'Chromium failed to start: ' + msg.splitlines()[0][:300]
+
 class Quiet(http.server.SimpleHTTPRequestHandler):
     def log_message(self, *a): pass
     def handle(self):  # the browser resets connections it no longer needs; that is not an error
@@ -35,17 +42,29 @@ class Quiet(http.server.SimpleHTTPRequestHandler):
         except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError): pass
 
 
+def start_server(d: Path):
+    """Serve the project over loopback HTTP. Returns (httpd, base_url). If the OS / sandbox refuses to bind a socket
+    (macOS sandboxes report PermissionError [Errno 1] Operation not permitted), returns (None, file:// url): the page
+    renders identically from file:// because every asset is a relative path."""
+    try:
+        httpd = socketserver.ThreadingTCPServer(('127.0.0.1', 0), functools.partial(Quiet, directory=str(d))); httpd.daemon_threads = True  # threaded: the page fetches several scripts at once
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        return httpd, f'http://127.0.0.1:{httpd.server_address[1]}/index.html'
+    except OSError as e:
+        print(f'note: cannot open a local server ({e.strerror or e}); rendering from file:// instead (same result).', file=sys.stderr)
+        return None, (d / 'index.html').resolve().as_uri()
+
 async def _render(d, a):
     from playwright.async_api import async_playwright
     tl = load_json(d / 'timeline.json'); W, H = tl['width'], tl['height']
-    httpd = socketserver.ThreadingTCPServer(('127.0.0.1', 0), functools.partial(Quiet, directory=str(d))); httpd.daemon_threads = True; port = httpd.server_address[1]  # threaded: the page fetches several scripts at once
-    threading.Thread(target=httpd.serve_forever, daemon=True).start()
+    httpd, url = start_server(d)
     scale = preview_scale(W, H) if a.preview or a.sheet else 1.0
     async with async_playwright() as pw:
-        b = await pw.chromium.launch(args=['--disable-gpu-vsync', '--disable-frame-rate-limit', '--force-color-profile=srgb'])
+        try: b = await pw.chromium.launch(args=['--disable-gpu-vsync', '--disable-frame-rate-limit', '--force-color-profile=srgb', '--allow-file-access-from-files'])
+        except Exception as e: sys.exit(browser_launch_help(e))
         pg = await b.new_page(viewport={'width': W, 'height': H}, device_scale_factor=scale)
         errs = []; pg.on('pageerror', lambda e: errs.append(str(e)))
-        await pg.goto(f'http://127.0.0.1:{port}/index.html')
+        await pg.goto(url)
         try: await pg.wait_for_function('window.READY===true || !!window.AVS_ERROR', timeout=120000)
         except Exception: pass
         err = await pg.evaluate('window.AVS_ERROR || null')
@@ -85,7 +104,7 @@ async def _render(d, a):
             else: silent.replace(final)
             silent.unlink(missing_ok=True); print('done', final, f'{time.time() - t0:.0f}s')
         await b.close()
-    httpd.shutdown()
+    if httpd: httpd.shutdown()
 
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('project', nargs='?')

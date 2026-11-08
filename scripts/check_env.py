@@ -12,6 +12,37 @@ def has(mod):
     try: importlib.import_module(mod); return True
     except Exception: return False
 
+def chromium_status(install=False):
+    """-> (ok, message). Tells apart three situations that used to look the same:
+       installed and launches        -> ok
+       installed but the sandbox blocks launching (macOS: 'Operation not permitted') -> ok for our purposes, with a note; do NOT reinstall
+       not installed                 -> MISSING (installs it when install=True, then re-checks)"""
+    if not has('playwright'): return False, 'MISSING (playwright package not installed)'
+    from playwright.sync_api import sync_playwright
+    def probe():
+        """-> 'ok' | 'missing' | 'blocked' | 'error:<msg>'"""
+        try:
+            with sync_playwright() as p:
+                exe = p.chromium.executable_path
+                if not exe or not os.path.exists(exe): return 'missing'
+                try: b = p.chromium.launch(); b.close(); return 'ok'
+                except Exception as e:
+                    m = str(e)
+                    if "doesn't exist" in m or 'playwright install' in m: return 'missing'
+                    if 'Operation not permitted' in m or 'Permission denied' in m or 'sandbox' in m.lower(): return 'blocked'
+                    return 'error:' + m.splitlines()[0][:160]
+        except Exception as e:
+            m = str(e)
+            if 'Operation not permitted' in m or 'Permission denied' in m: return 'blocked'
+            return 'error:' + m.splitlines()[0][:160]
+    st = probe()
+    if st == 'missing' and install:
+        subprocess.run([sys.executable, '-m', 'playwright', 'install', 'chromium'], check=False); st = probe()
+    if st == 'ok': return True, 'ok'
+    if st == 'blocked': return True, 'installed, but this sandbox blocked a test launch (Operation not permitted). Not a missing browser: do not reinstall; run builds with the sandbox permission that allows starting a local browser'
+    if st == 'missing': return False, 'MISSING -> python -m playwright install chromium'
+    return False, 'could not start: ' + st[6:]
+
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('--install', action='store_true'); a = ap.parse_args()
     rows, ok = [], True
@@ -21,15 +52,8 @@ def main():
         subprocess.run([sys.executable, '-m', 'pip', 'install', '-q', *missing], check=False)
         missing = [pip for mod, pip in PKGS.items() if not has(mod)]
     for mod, pip in PKGS.items(): rows.append((pip, 'ok' if has(mod) else 'MISSING', has(mod)))
-    chromium = False
-    if has('playwright'):
-        try:
-            from playwright.sync_api import sync_playwright
-            with sync_playwright() as p: b = p.chromium.launch(); b.close(); chromium = True
-        except Exception:
-            if a.install:
-                subprocess.run([sys.executable, '-m', 'playwright', 'install', 'chromium'], check=False); chromium = True
-    rows.append(('chromium (playwright)', 'ok' if chromium else 'MISSING -> python -m playwright install chromium', chromium))
+    chromium, chromium_note = chromium_status(a.install)
+    rows.append(('chromium (playwright)', chromium_note, chromium))
     try:
         from avs_common import ffmpeg; ff = ffmpeg(); rows.append(('ffmpeg', ff, True))
     except SystemExit: rows.append(('ffmpeg', 'MISSING', False))

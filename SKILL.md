@@ -62,7 +62,7 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 
 | 脚本 | 作用 |
 |---|---|
-| `check_env.py [--install]` | 检查/安装 Python 依赖、Chromium、ffmpeg，探测网关 key 和灵境 CLI |
+| `check_env.py [--install]` | 检查/安装 Python 依赖、Chromium、ffmpeg，探测网关 key 和灵境 CLI。区分"没装"和"装了但被沙箱拦"，后者不用重装 |
 | `new_project.py <dir> [--version]` | 新建项目 / 复制出新版本 |
 | `imagegen.py "提示词" -o a.png [--size] [--ref]` | 按配置的模型链生图（主模型优先，仅额度类错误降级） |
 | `voice.py` | 逐镜配音（edge / say / sapi / 自带录音），文本不变不重配 |

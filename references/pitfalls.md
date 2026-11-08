@@ -27,3 +27,8 @@
 | `finalize.py` 报真峰值超限（如 -0.3 dBTP），而混音 WAV 里是 -1.5 | AAC 编码会让真峰值比编码前高约 1 dB | `finalize.py` 现在编码前把上限压到 -2.6 dBTP，并测量编码后的成品；仍超限就自动逐级下调重试（-3.6 / -4.8 / -6.0）；改用更低天花板后响度可能略降，仍须在容差内 |
 | 同时开两个渲染，成片坏掉（`Invalid NAL unit`、前半段是同一帧） | 两个渲染写同一个临时文件 `out/_preview_silent.mp4` / `_final_silent.mp4` | 一个项目同一时间只跑一个渲染；渲染完用 ffmpeg 全片解码检查 |
 | 成片 400+ MB，抖音上传困难 | `render.py` 用 CRF 17 保留母版质量 | 母版留着；投稿用 `ffmpeg -c:v libx264 -crf 23 -preset slow -c:a copy`，1080p/83 秒约 65 MB，肉眼与母版几乎无差别（平均像素差 < 3） |
+| `check_env` 报 `chromium MISSING`，重装后仍然报 | 浏览器其实装好了，是沙箱不让启动（macOS：`PermissionError: Operation not permitted`），旧版把"启动失败"一律当"没装" | 新版 `check_env.py` 区分三种情况：能启动 / 装了但被沙箱拦（提示不要重装，改用放行权限运行）/ 没装。看到"installed, but this sandbox blocked"就别再装了 |
+| `render.py` 报 `PermissionError: [Errno 1] Operation not permitted`（栈在 `socket.bind`） | 沙箱不允许绑定本地端口，旧版渲染依赖本地 HTTP 服务器 | 新版绑定失败时自动改用 `file://` 渲染（所有素材都是相对路径，结果相同），并打印一行说明；浏览器本身被拦时给出可操作的提示 |
+| 在 shell 里直接敲 `ffmpeg` 报 `command not found`（Mac 常见） | 系统没装 ffmpeg；本 skill 的脚本不依赖它，会自动找 `imageio-ffmpeg` 自带的 | 脚本之外要用 ffmpeg 时：`python -c "from avs_common import ffmpeg; print(ffmpeg())"`（在 `scripts/` 下），或 `python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"`；灵境 CLI 也自带一份（`lingjing clip which-ffmpeg`） |
+| 灵境第一次提交报 `[539] 使用素材库功能，请先同意Seedance2.0模型使用承诺书` | 没签承诺书 | 只能用户本人在灵境网页签；见 `routes/ai-drama.md` 开头的「第一次用之前」 |
+| AI 剧一段旁白读出来比 15 秒视频长 | 旁白字数超过约 50 字（实测约 3.9 字/秒） | 见 `routes/ai-drama.md` 的「旁白字数」，先估再写 |
