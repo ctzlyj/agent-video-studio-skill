@@ -39,6 +39,10 @@ def main():
     rows.append(('lingjing CLI (AI drama routes only)', lj or 'not installed (optional)', True))
     offline = 'say (macOS)' if SYSTEM == 'Darwin' else ('SAPI (Windows)' if SYSTEM == 'Windows' else 'espeak if installed')
     rows.append(('offline TTS fallback', offline, True))
+    # optional capabilities (never block READY; see references/capabilities.md)
+    node = shutil.which('node'); rows.append(('node (optional: Remotion / HyperFrames / p5 / gsap installs)', node or 'not installed (optional)', True))
+    rows.append(('rembg (optional: cut generated objects out as transparent PNG)', 'ok' if has('rembg') else 'not installed: pip install rembg', True))
+    rows.append(('librosa (optional: beat / audio analysis)', 'ok' if has('librosa') else 'not installed: pip install librosa', True))
     for name, val, good in rows:
         ok &= good; print(f"{'OK ' if good else 'XX '} {name}: {val}")
     print('\nREADY' if ok else '\nNOT READY - rerun with --install')

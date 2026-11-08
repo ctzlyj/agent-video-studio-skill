@@ -322,4 +322,53 @@ class TruePeakAfterAacTest(unittest.TestCase):
             self.assertLess(abs(li + 16.0), 2.0)
 
 
+class ThreeLayerTest(unittest.TestCase):
+    def test_three_layer_renders_deterministically_through_the_shader_post(self):
+        import asyncio, functools, hashlib, http.server, shutil, socketserver, threading
+        from playwright.async_api import async_playwright
+        fx = SK / 'assets' / 'fx'
+        if not (fx / 'vendor' / 'three.module.min.js').exists(): self.skipTest('three.module.min.js not bundled')
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t)
+            for f in ('fx.js', 'lib.js', 'three-layer.js'): shutil.copy(fx / f, d / f)
+            shutil.copy(SK / 'assets' / 'template' / 'avs-runtime.js', d / 'avs-runtime.js'); (d / 'vendor').mkdir(); shutil.copy(fx / 'vendor' / 'three.module.min.js', d / 'vendor' / 'three.module.min.js')
+            shutil.copy(fx / 'examples' / 'three-demo-index.html', d / 'index.html'); shutil.copy(fx / 'examples' / 'three-demo-scenes.js', d / 'scenes.js'); (d / 'style.css').write_text('body{background:#000}', encoding='utf-8')
+            (d / 'timeline.js').write_text('window.TL={"duration":4,"fps":30,"width":1920,"height":1080,"scenes":[{"id":"s01","start":0,"dur":4,"speed":1,"ns":0,"nd":4,"voStart":0,"voDur":0,"transition":"cut"}],"subs":[]};', encoding='utf-8')
+            (d / 'project.js').write_text('window.PROJECT={"scenes":[{"id":"s01","type":"x","data":{}}]};', encoding='utf-8'); (d / 'videos.js').write_text('window.VIDEOS={};', encoding='utf-8')
+            class Q(http.server.SimpleHTTPRequestHandler):
+                def log_message(self, *a): pass
+                def handle(self):
+                    try: super().handle()
+                    except Exception: pass
+            httpd = socketserver.ThreadingTCPServer(('127.0.0.1', 0), functools.partial(Q, directory=str(d))); httpd.daemon_threads = True
+            port = httpd.server_address[1]; threading.Thread(target=httpd.serve_forever, daemon=True).start()
+            async def run():
+                out = {}
+                async with async_playwright() as p:
+                    b = await p.chromium.launch(args=['--force-color-profile=srgb']); pg = await b.new_page(viewport={'width': 1920, 'height': 1080}); errs = []
+                    pg.on('pageerror', lambda e: errs.append(str(e)[:200]))
+                    await pg.goto(f'http://127.0.0.1:{port}/index.html'); await pg.wait_for_function('window.READY===true||window.AVS_ERROR', timeout=60000)
+                    out['avs_error'] = await pg.evaluate('window.AVS_ERROR||null'); await pg.evaluate('window.__ready'); h = []
+                    for tt in (.5, .5, 2.0): await pg.evaluate(f'window.render({tt})'); h.append(hashlib.md5(await pg.screenshot(type='png')).hexdigest())
+                    out['hashes'] = h; out['errs'] = errs; await b.close()
+                return out
+            try: r = asyncio.run(run())
+            finally: httpd.shutdown()
+            self.assertIsNone(r['avs_error']); self.assertEqual(r['errs'], [])
+            self.assertEqual(r['hashes'][0], r['hashes'][1], 'same t must give identical pixels'); self.assertNotEqual(r['hashes'][0], r['hashes'][2])
+
+
+class WorldCameraTest(unittest.TestCase):
+    """The one-take camera spline must pass through every key and never overshoot (no stop-start, no rubber-banding)."""
+    def test_track_interpolates_keys_and_never_overshoots(self):
+        import shutil as _sh
+        node = _sh.which('node')
+        if not node: self.skipTest('node not installed')
+        src = (SK / 'assets' / 'fx' / 'world.js').read_text(encoding='utf-8')
+        track = src[src.index('function track(keys, field)'):src.index('const CAM =')]
+        js = (SK / 'tests' / 'camera_spline_check.js').read_text(encoding='utf-8').replace('%%TRACK%%', track)
+        r = subprocess.run([node, '-e', js], capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(r.returncode, 0, r.stderr); self.assertEqual(r.stdout.strip(), 'OK', r.stdout)
+
+
 if __name__ == '__main__': unittest.main()

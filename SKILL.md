@@ -54,7 +54,7 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 
 配乐：代码动画默认用内置 BGM，不用配置；给每镜标 `mood` 让音量跟剧情起伏。**用户明确要换 BGM 才改用 `music.file` / `music.style`**。规则见 `references/music.md`。
 
-要做"让人惊艳"的片子（抖音、发布会开场、品牌片）：读 `references/showcase.md`（着色器后期、画面事件钉在旁白词上、冷暖音色、竖屏节奏检查），素材在 `assets/fx/`。
+可用的技术与素材全部列在 `references/capabilities.md`（画面、3D、着色器、框架、声音、素材、工具，标明哪些已随包、哪些自取、实测情况）；做法经验见 `references/showcase.md`。用哪些、怎么组合，由你根据任务自行判断。
 
 写 `scenes.js` 前读 `references/engine.md`（运行时 API、确定性规则、视频素材、倍速）。踩坑与排查见 `references/pitfalls.md`。
 

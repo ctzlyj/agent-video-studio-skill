@@ -7,3 +7,6 @@ qa/
 _frames/
 *.mp4
 *.wav
+
+assets/fx/vendor/three.module.js
+_t3demo/
