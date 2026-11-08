@@ -55,6 +55,15 @@ def check(project, root: Path):
     f = music.get('file')
     if f and ABS.match(f): add('error', 'abs_path', 'music', f'absolute path "{f}"')
     elif f and not (root / f).exists(): add('error', 'missing_asset', 'music', f'file not found: {f}')
+    rnd = project.get('render') or {}
+    def _num(v, lo, hi, name):
+        try: ok = lo <= float(v) <= hi
+        except (TypeError, ValueError): ok = False
+        if not ok: add('error', 'render', f'render.{name}', f'{name} must be a number in {lo}-{hi}, got {v!r}')
+    if 'workers' in rnd: _num(rnd['workers'], 1, 16, 'workers')
+    mbk = rnd.get('motionBlur') or {}
+    if 'samples' in mbk: _num(mbk['samples'], 1, 16, 'motionBlur.samples')
+    if 'shutter' in mbk: _num(mbk['shutter'], 0.05, 1.0, 'motionBlur.shutter')
     import bgm, score
     try: src = bgm.resolve(music, project.get('route'))
     except ValueError as e: src = None; add('error', 'music', 'music', str(e))

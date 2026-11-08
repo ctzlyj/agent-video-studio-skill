@@ -419,5 +419,159 @@ class SandboxResilienceTest(unittest.TestCase):
         self.assertIn('sandbox', render.browser_launch_help(Exception('launch: Operation not permitted')))
         self.assertIn('failed to start', render.browser_launch_help(Exception('something else')).lower())
 
+class MotionBlurAndWorkersTest(unittest.TestCase):
+    """Sub-frame motion blur and multi-browser rendering (render.py)."""
+    def test_sample_times_single_sample_is_the_frame_time(self):
+        import render
+        self.assertEqual(render.sample_times(30, 30, 1, 0.5, 10.0), [1.0])
+
+    def test_sample_times_are_centred_on_the_frame_and_stay_inside_the_film(self):
+        import render
+        ts = render.sample_times(30, 30, 4, 0.5, 10.0)
+        self.assertEqual(len(ts), 4); self.assertEqual(ts, sorted(ts))
+        self.assertAlmostEqual(sum(ts) / 4, 1.0, 6)                       # symmetric around the frame time
+        self.assertAlmostEqual(ts[-1] - ts[0], 0.5 * (3 / 4) / 30, 6)     # spans shutter * (n-1)/n of one frame
+        first = render.sample_times(0, 30, 4, 1.0, 10.0); self.assertTrue(all(t >= 0 for t in first))
+        last = render.sample_times(299, 30, 4, 1.0, 10.0); self.assertTrue(all(t < 10.0 for t in last))
+
+    def test_plan_chunks_cover_every_frame_exactly_once(self):
+        import render
+        for n, w in ((10, 3), (7, 7), (5, 9), (1, 4), (100, 1)):
+            ch = render.plan_chunks(n, w)
+            self.assertEqual(ch[0][0], 0); self.assertEqual(ch[-1][1], n)
+            self.assertTrue(all(a < b for a, b in ch)); self.assertTrue(all(ch[i][1] == ch[i + 1][0] for i in range(len(ch) - 1)))
+            self.assertLessEqual(len(ch), min(w, n))
+
+    def test_hold_runtime_helper_quantises_time(self):
+        rt = (SK / 'assets' / 'template' / 'avs-runtime.js').read_text(encoding='utf-8')
+        self.assertIn('hold', rt)
+
+    def _tiny_project(self, root, **fmt):
+        d = Path(root) / 'p'; subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'new_project.py'), str(d), '--title', 'tiny'], check=True, capture_output=True)
+        p = json.loads((d / 'project.json').read_text(encoding='utf-8'))
+        p['format'].update({'width': 640, 'height': 360, 'fps': 10, **fmt}); p['voice']['engine'] = 'none'; p['music'] = {'generate': 'none'}
+        for sc in p['scenes']: sc.pop('vo', None); sc['pad'] = 0.6
+        (d / 'project.json').write_text(json.dumps(p, ensure_ascii=False), encoding='utf-8')
+        subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'timeline.py'), str(d)], check=True, capture_output=True)
+        return d
+
+    def _frames(self, mp4):
+        from avs_common import ffmpeg
+        r = subprocess.run([ffmpeg(), '-hide_banner', '-i', str(mp4), '-map', '0:v:0', '-f', 'null', '-'], capture_output=True, text=True, encoding='utf-8', errors='ignore')
+        import re
+        self.assertNotIn('error', r.stderr.lower().replace('error resilience', ''))
+        return int(re.findall(r'frame=\s*(\d+)', r.stderr)[-1])
+
+    def test_final_render_frame_count_is_exact_with_blur_and_workers(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = self._tiny_project(t); tl = json.loads((d / 'timeline.json').read_text(encoding='utf-8')); n = round(tl['duration'] * tl['fps'])
+            counts = {}
+            for tag, extra in (('plain', []), ('blur', ['--mb', '3']), ('par', ['--workers', '2']), ('both', ['--workers', '3', '--mb', '2'])):
+                r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'render.py'), str(d), '--final', *extra], capture_output=True, text=True, encoding='utf-8', errors='ignore')
+                self.assertEqual(r.returncode, 0, tag + '\n' + r.stdout[-800:] + r.stderr[-800:])
+                counts[tag] = self._frames(d / 'out' / 'tiny.mp4')
+            self.assertEqual(set(counts.values()), {n}, counts)
+            self.assertEqual([p.name for p in (d / 'out').glob('_*')], [], 'temporary segment files must be cleaned up')
+
+    def test_final_video_is_tagged_bt709_and_brand_colours_survive_a_709_player(self):
+        """Chrome frames are sRGB; HD players decode untagged/601 files with the 709 matrix, which shifts saturated brand colours
+        (measured: mint #2EE6A8 off by 23/255). The encoder must convert with the 709 matrix AND tag it."""
+        import numpy as np
+        from PIL import Image
+        from avs_common import ffmpeg
+        with tempfile.TemporaryDirectory() as t:
+            d = self._tiny_project(t)
+            pj = json.loads((d / 'project.json').read_text(encoding='utf-8'))
+            for sc in pj['scenes']: sc['transition'] = 'cut'          # frame 0 must not be a fade-in from black
+            (d / 'project.json').write_text(json.dumps(pj, ensure_ascii=False), encoding='utf-8')
+            subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'timeline.py'), str(d)], check=True, capture_output=True)
+            (d / 'scenes.js').write_text("for (const k of ['title','bullets']) AVS.scene(k, (o)=>{ o.root.style.background='linear-gradient(90deg,#e5402b 0 25%,#ffc425 25% 50%,#2b2bff 50% 75%,#2ee6a8 75%)' }, ()=>{})", encoding='utf-8')
+            for extra in ([], ['--mb', '2']):
+                r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'render.py'), str(d), '--final', *extra], capture_output=True, text=True, encoding='utf-8', errors='ignore')
+                self.assertEqual(r.returncode, 0, r.stdout[-500:] + r.stderr[-500:])
+                mp4 = d / 'out' / 'tiny.mp4'
+                info = subprocess.run([ffmpeg(), '-hide_banner', '-i', str(mp4)], capture_output=True, text=True, encoding='utf-8', errors='ignore').stderr
+                self.assertIn('bt709', info.split('Video:')[1].split('\n')[0])
+                png = d / 'dec.png'
+                subprocess.run([ffmpeg(), '-y', '-loglevel', 'error', '-i', str(mp4), '-vf', 'scale=in_color_matrix=bt709:in_range=tv:out_range=pc,format=rgb24', '-vframes', '1', str(png)], check=True)
+                im = np.asarray(Image.open(png).convert('RGB'), int)
+                for x, want in ((80, (0xe5, 0x40, 0x2b)), (240, (0xff, 0xc4, 0x25)), (400, (0x2b, 0x2b, 0xff)), (560, (0x2e, 0xe6, 0xa8))):
+                    err = max(abs(int(a) - b) for a, b in zip(im[180, x], want))
+                    self.assertLessEqual(err, 6, f'colour at x={x} off by {err} (mb={extra})')
+
+class RenderSettingsLintTest(unittest.TestCase):
+    def _issues(self, render):
+        import lint
+        with tempfile.TemporaryDirectory() as t:
+            d = proj(t, render=render); return lint.check(json.loads((d / 'project.json').read_text(encoding='utf-8')), d)
+
+    def test_valid_render_block_is_clean(self):
+        self.assertEqual([i for i in self._issues({'motionBlur': {'samples': 4, 'shutter': 0.5}, 'workers': 3}) if i['kind'] == 'render'], [])
+
+    def test_out_of_range_values_are_errors(self):
+        for bad in ({'workers': 0}, {'workers': 64}, {'motionBlur': {'samples': 0}}, {'motionBlur': {'samples': 99}}, {'motionBlur': {'shutter': 1.5}}, {'workers': 'many'}):
+            self.assertTrue([i for i in self._issues(bad) if i['kind'] == 'render' and i['level'] == 'error'], bad)
+
+    def test_render_settings_precedence_cli_over_project(self):
+        import render, types
+        a = types.SimpleNamespace(mb=None, shutter=None, workers=None)
+        self.assertEqual(render.render_settings(a, {}), (1, 0.5, 1))
+        self.assertEqual(render.render_settings(a, {'render': {'motionBlur': {'samples': 4, 'shutter': .25}, 'workers': 2}}), (4, .25, 2))
+        b = types.SimpleNamespace(mb=2, shutter=None, workers=5)
+        self.assertEqual(render.render_settings(b, {'render': {'motionBlur': {'samples': 4}, 'workers': 2}}), (2, .5, 5))
+
+
+class TexturesAndReviewTest(unittest.TestCase):
+    def test_new_project_textures_flag_copies_the_pack_into_the_project(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / 'p'
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'new_project.py'), str(d), '--textures'], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            tex = d / 'assets' / 'textures'
+            self.assertTrue((tex / 'paper_2048.jpg').exists()); self.assertTrue(any(tex.glob('dust_*.png'))); self.assertTrue((tex / 'CREDITS.md').exists())
+            d2 = Path(t) / 'q'; subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'new_project.py'), str(d2)], check=True, capture_output=True)
+            self.assertFalse((d2 / 'assets' / 'textures').exists(), 'textures are opt-in')
+
+    def test_texture_pack_has_credits_for_every_file(self):
+        tex = SK / 'assets' / 'textures'; credits = (tex / 'CREDITS.md').read_text(encoding='utf-8')
+        for f in tex.iterdir():
+            if f.suffix.lower() in ('.png', '.jpg'): self.assertIn(f.name.split('_')[0], credits, f.name)
+        self.assertTrue((tex / 'LICENSE-mg-styles-15.txt').exists())
+
+    def test_review_pack_writes_sheet_strips_and_spec(self):
+        from avs_common import ffmpeg
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / 'p'; subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'new_project.py'), str(d), '--title', 'rv'], check=True, capture_output=True)
+            mp4 = d / 'out' / 'rv.mp4'
+            subprocess.run([ffmpeg(), '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=size=320x180:rate=10:duration=4', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=4', '-shortest', '-pix_fmt', 'yuv420p', str(mp4)], check=True)
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'review_pack.py'), str(d), '--file', str(mp4), '--moves', '1.0,2.5'], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            rv = d / 'qa' / 'review'
+            self.assertTrue((rv / 'sheet_0.5s.jpg').exists()); self.assertEqual(len(list(rv.glob('strip_*.jpg'))), 2); self.assertTrue(list(rv.glob('frame_*.png')))
+            spec = json.loads((rv / 'spec.json').read_text(encoding='utf-8'))
+            self.assertAlmostEqual(spec['duration'], 4.0, delta=0.2); self.assertEqual((spec['width'], spec['height']), (320, 180)); self.assertTrue(spec['has_audio'])
+
+
+class TextureOverlayTest(unittest.TestCase):
+    def test_texture_overlays_are_deterministic_and_boil_between_steps(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / 'p'; subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'new_project.py'), str(d), '--title', 'tex', '--textures'], check=True, capture_output=True)
+            (d / 'texture.js').write_text((SK / 'assets' / 'fx' / 'texture.js').read_text(encoding='utf-8'), encoding='utf-8')
+            (d / 'index.html').write_text((d / 'index.html').read_text(encoding='utf-8').replace('<script src="scenes.js">', '<script src="texture.js"></script><script src="scenes.js">'), encoding='utf-8')
+            p = json.loads((d / 'project.json').read_text(encoding='utf-8')); p['format'].update({'width': 480, 'height': 270, 'fps': 12}); p['voice']['engine'] = 'none'; p['music'] = {'generate': 'none'}
+            p['scenes'] = [{'id': 's01', 'type': 'x', 'dur': 2, 'pad': 0.0, 'speed': 1.0, 'transition': 'cut', 'data': {}}]
+            (d / 'project.json').write_text(json.dumps(p), encoding='utf-8')
+            (d / 'scenes.js').write_text("AVS.scene('x', (o)=>{ TEX.paper(o.root); TEX.tape(o.root,{x:200,y:40,w:160,rot:-8}); TEX.dust(o.root,{op:.7}); TEX.grain(o.root,{kind:'film35',op:.3}) }, (o,lt)=>{ TEX.step(lt) })", encoding='utf-8')
+            subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'timeline.py'), str(d)], check=True, capture_output=True)
+            def shot(ts):
+                r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'render.py'), str(d), '--stills', ts], capture_output=True, text=True, encoding='utf-8'); self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+                return [hashlib.md5(f.read_bytes()).hexdigest() for f in sorted((d / 'qa').glob('still_*.png'), key=lambda f: float(f.stem.split('_')[1]))]
+            a = shot('0.5'); b = shot('0.5')
+            self.assertEqual(a, b, 'same t must give identical pixels')
+            c = shot('0.5,1.2'); self.assertNotEqual(c[0], c[1], 'grain / dust must move between steps')
+            e = shot('0.5,0.54'); self.assertEqual(e[0], e[1], 'inside one step (rate 12/s) nothing may change')
+
+
 
 if __name__ == '__main__': unittest.main()

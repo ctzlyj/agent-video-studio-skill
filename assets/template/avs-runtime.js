@@ -14,6 +14,8 @@
     back: t => { t = clamp(t); const c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2) },
     spring: t => { t = clamp(t); return 1 - Math.cos(t * Math.PI * 4.5) * Math.exp(-t * 6) }
   };
+  /* hold(t, rate): quantise time to ate steps per second (animate on twos: hold(t, 12) at 24-30fps gives stepped, hand-made motion) */
+  const hold = (t, rate = 12) => Math.floor(t * rate + 1e-6) / rate;
   const el = (tag, cls = '', html = '', style = '') => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; if (style) e.style.cssText = style; return e };
   const add = (parent, e) => (parent.appendChild(e), e);
   function set(e, o = {}) {
@@ -89,7 +91,7 @@
     });
     await Promise.all([...imgs, ...vids]); await document.fonts.ready;
   }
-  window.AVS = { scene, el, add, set, enter, seg, lerp, clamp, E, count, typeText, rand, video, drawVideo, FMT, P, TL };
+  window.AVS = { hold, scene, el, add, set, enter, seg, lerp, clamp, E, count, typeText, rand, video, drawVideo, FMT, P, TL };
   window.addEventListener('load', async () => {
     try { mount(); await preload(); window.render(0); window.READY = true } catch (e) { window.AVS_ERROR = String(e && e.stack || e); console.error(e) }
   });

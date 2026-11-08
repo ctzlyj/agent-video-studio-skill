@@ -32,3 +32,6 @@
 | 在 shell 里直接敲 `ffmpeg` 报 `command not found`（Mac 常见） | 系统没装 ffmpeg；本 skill 的脚本不依赖它，会自动找 `imageio-ffmpeg` 自带的 | 脚本之外要用 ffmpeg 时：`python -c "from avs_common import ffmpeg; print(ffmpeg())"`（在 `scripts/` 下），或 `python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())"`；灵境 CLI 也自带一份（`lingjing clip which-ffmpeg`） |
 | 灵境第一次提交报 `[539] 使用素材库功能，请先同意Seedance2.0模型使用承诺书` | 没签承诺书 | 只能用户本人在灵境网页签；见 `routes/ai-drama.md` 开头的「第一次用之前」 |
 | AI 剧一段旁白读出来比 15 秒视频长 | 旁白字数超过约 50 字（实测约 3.9 字/秒） | 见 `routes/ai-drama.md` 的「旁白字数」，先估再写 |
+| 品牌色在播放器里偏了（mint `#2EE6A8` 偏 23/255、红偏 13） | 旧版编码没做 BT.709 矩阵转换也没打标，播放器按 601 猜 | 1.3.0 起 `render.py` 按 709 转换并打标；已交付的旧片需重渲才会改善 |
+| `--workers 3` 出片比单浏览器慢，或与单浏览器逐字节不同 | 简单画面启动多个浏览器的开销大于收益；分段处 GOP 不同，像素平均差 0.1–0.9/255 | 只对着色器/3D 这类慢画面开；要逐字节复现用 1 个 |
+| `--mb` 开了但没有拖影 | 子时刻平均只对连续位移有效；用了 `AVS.hold` 的阶梯运动、或 `E.out` 在子时刻内已停止 | 运动模糊和"一拍二"不同时用；快动作把 `--shutter` 提到 1.0 |

@@ -8,7 +8,7 @@
 |---|---|---|---|
 | 不知道用哪个（通用总控） | Kianzzz/xilo-opus-video | MIT | 3 方案出样 → brief.md 锁定 |
 | 特定风格（66 种） | lemomo-ai/lemo-opuscar | MIT | `styles/<风格>/STYLE.md`：archive-lighttable、newsreel、visual-investigation、cel-anime-80s、ukiyoe、ink-wash、swiss-motion、dark-keynote、dataviz、paper-popup、pixel-rpg、watercolor、blueprint、hologram-hud…；先写自己的方案再看 demo |
-| MG 动画 | Vincentwei1021/mg-styles-15 | MIT | `prompts/<风格>.md` 的 Signature features 段、`rubric.md` 评审表 |
+| MG 动画 | Vincentwei1021/mg-styles-15 | MIT | **已吸收**进 `references/mg-styles.md`（15 张风格卡、评审提示词）和 `assets/textures/`。完整提示词、15 支成片源码、配乐库 mgaudio 仍可自取该仓库的 `prompts/`、`demos/`、`lib/audio` |
 | 口播配画面 | chuspeeism/dashi-animationstyle | MIT | 关键词绑定、7 套画风的风格词典 |
 | 知识/艺术解说 | alchaincyf/huashu-art-motion | MIT | `references/` 的镜头表、正面经验、36 种艺术风格 |
 | 从剧本开始 | WaterDJiang/Wattter_openSkills（wtt-code-animation-studio） | 无 | 只看流程 |

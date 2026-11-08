@@ -15,6 +15,8 @@
 | ⑤ Three.js（3D） | 随包 | 写实质感：物理材质、灯光、阴影、雾、景深感、相机穿行 | `assets/fx/three-layer.js` + `vendor/three.module.min.js`（r160，MIT）；与 2D、着色器后期共用同一画布；1080p 约 0.14–0.25 秒/帧，**同一时间两次渲染像素一致（已测）**；示例 `assets/fx/examples/` |
 | 一镜到底的相机 | 随包 | 一个世界 + 一条相机路径（单调三次样条，无过冲）、视差分层、天际线、地面、小物件库、粒子池变形 | `assets/fx/world.js`（有回归测试） |
 | 字形剪切 / 手剪边缘 | 随包 | 把字形轮廓取出来再加工（剪纸、片头字） | `vendor/opentype.min.js`（MIT） |
+| 质感纹理 | 随包 | 纸张底纹、可无缝平铺的细颗粒/胶片颗粒、尘点划痕、和纸胶带；颗粒按拍点换位（"boil"），同一时间逐像素一致 | `assets/textures/` + `assets/fx/texture.js`，`new_project.py --textures`；来源与授权见 `assets/textures/CREDITS.md`，用法见 `references/mg-styles.md` |
+| 运动模糊 / 一拍二 | 随包 | `render.py --mb N --shutter S` 子帧平均；`AVS.hold(t, 12)` 时间量化 | `references/mg-styles.md` 第三节 |
 | 动画库 GSAP | 自取 | 时间线、缓动、序列；用 `paused` 时间线 + `seek(t)` 即可确定性 | `npm i gsap`；许可为"免费但有条件"，**没有随包** |
 
 ## 二、视频框架与引擎
@@ -39,6 +41,7 @@
 | 代码合成配乐 | 随包 | 6 种风格，按分镜换和弦、加减鼓点，`scripts/score.py` |
 | 音效 | 随包 | 代码合成：tick / ok / alert / whoosh / boom / pop / click / swell |
 | 音频分析（节拍、响度） | 自取 | `pip install librosa`（实测可装可用）；响度与真峰值检查已在 `scripts/finalize.py` 里 |
+| 独立评审证据包 | 随包（脚本） | 联系表、快动作条带、全分辨率帧、实测规格，交给另一个会话评审 | `scripts/review_pack.py`，评审提示词见 `references/mg-styles.md` |
 | 混音与终检 | 随包 | 旁白闪避、整片响度校准、真峰值（含 AAC 编码后实测并自动重试）、无 BGM 版、SRT |
 
 ## 四、素材：代码画不好的部分
@@ -64,6 +67,7 @@ Python、ffmpeg（自动查找，找不到会用 imageio-ffmpeg）、Node.js、P
 - AAC 编码会让真峰值比编码前高约 1 dB，交付检查要测编码后的成品。
 - 同一项目同一时间只开一个渲染，否则会互相覆盖临时文件。
 - 软件渲染下，3D（Three.js）并不慢，别因为印象而放弃它。
+- 并行渲染（`--workers`）在简单画面上反而更慢，着色器/3D 这类慢画面才有收益（实测 1.4 倍，见 `mg-styles.md`）。
 
 ## 七、没验到的
 
