@@ -22,6 +22,19 @@
 - 替换词放进 `pronounce` 后，`voice.py --check` 会显示“已配置”。
 - 换音色/改文案后要重跑 `voice.py`（文本不变时才有缓存命中）。
 
+## 2. 声线与教学/培训默认
+
+| 音色 | 特点 | 适用 | 建议语速 |
+|---|---|---|---|
+| `zh-CN-XiaoxiaoNeural` | 温暖、清楚、自然 | 教学/培训、知识讲解、温柔旁白 | `+10%~+12%`（教学默认 `+12%`） |
+| `zh-CN-XiaoyiNeural` | 活泼、年轻、略俏皮 | 搞笑、轻松短剧、二创 | `+8%~+10%` |
+| `zh-CN-YunxiNeural` | 温和男声 | 品牌、产品、温和叙事 | `+0%~+8%` |
+| `zh-CN-YunyangNeural` | 新闻播报感、清晰 | 新闻、制度、正式说明 | `+0%~+6%` |
+
+`new_project.py --route ai-comic-drama` / `ai-live-drama` 默认写 `XiaoxiaoNeural +12%`；代码动画路线保持模板原来的 Yunxi +0%。用户说“语速很慢”时，教学类先调到 +10%~+12%，不要靠 `speed` 硬压画面。`voice.py` 的 edge 引擎已改为 5 次重试（指数退避），批量合成偶发限流/超时会自动重试。
+
+ASR 转写经常返回繁体（例如“重復”）。`voice.py --check --asr` 会先把繁转简再做拼音比较，所以“重復/重复”不会被误报为不同读音。
+
 ## 2. 实测记录（2026-11-10）
 
 方法：用 edge-tts 生成原词与替换词音频，再用 faster-whisper `small` 转写，最后用 pypinyin（不带声调）比对。测试音色：`zh-CN-YunxiNeural`、`zh-CN-YunyangNeural`、`zh-CN-XiaoxiaoNeural`。这只是 ASR 证据，不是人耳听感；交付前仍要让用户重点听。
@@ -30,7 +43,8 @@
 |---|---|---|---|
 | `还款` | `环款` | Yunyang/Xiaoxiao 原词读 hái kuǎn；Yunxi 该短句 ASR 失败，未确认；**三个音色换成“环款”后都读 huán kuǎn** | 建议写进 `pronounce` |
 | `长度` | `常度` | Yunxi / Yunyang 原词读 zhǎng dù，换成“常度”后读 cháng dù；Xiaoxiao 的 ASR 仍归为“长度/zhǎng”，**未确认** | Yunxi/Yunyang 可用；Xiaoxiao 要试听确认 |
-| `重复` | `虫复` / `崇复` | 本次在“重复三遍”“重复活”里，三个音色都已经读 chóng fù；没有复现 zhòng | 先不替换；如果实际听感是 zhòng，再试“虫复” |
+| `重复` | `虫复` / `崇复` | 用户实战反馈“重复活”读 zhòng；本次三音色在“重复三遍/重复活”的 ASR 里都读 chóng，未复现，可能是音色/上下文差异 | 先不替换；如果实际听感是 zhòng，再试“虫复/崇复”并让用户复听 |
+| `还有` | `孩有` | Yunxi/Xiaoxiao 原词与“孩有”都读 hái yǒu，正确 | 一般不用替换 |
 | `银行` | `银杭` | 三个音色都读 yín háng，正确 | 一般不用替换 |
 | `行业` | `杭业` | 三个音色都读 háng yè，正确 | 一般不用替换 |
 | `重庆` | `虫庆` | 三个音色都读 chóng qìng，正确 | 一般不用替换 |
@@ -56,9 +70,11 @@ python scripts/voice.py <项目> --check --asr --strict   # 有可疑项时返�
 
 ```text
 [s01] 读音提示：
-  建议 还款 -> 环款（huán kuǎn；还 here is huán; all three tested voices read the original as hái and 环款 as huán）
+  已配置 还款 -> 环款（huán kuǎn）
   [ASR] s01: 转写「本月环款日期到了。」
   [ASR] 拼音与配音文本一致（不代表声调一定正确）
+
+请重点听以上标出的词；ASR 通过不代表声调/语气一定正确。
 ```
 
 `--asr` 会用 `scripts/transcribe.py` 的 faster-whisper 模型，第一次运行可能下载模型；不上传音频、不调用付费服务。检查完把可疑项列给用户，请用户重点听这些位置。

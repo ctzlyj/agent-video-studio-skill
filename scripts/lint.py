@@ -65,10 +65,23 @@ def check(project, root: Path):
     if 'samples' in mbk: _num(mbk['samples'], 1, 16, 'motionBlur.samples')
     if 'shutter' in mbk: _num(mbk['shutter'], 0.05, 1.0, 'motionBlur.shutter')
     import bgm, score
-    if bgm.drama_track_blocked(music, project.get('route')):
-        add('warn', 'drama_bgm', 'music', 'AI drama routes must not use the built-in code-animation BGM; resolve() will switch to the synthesized theme score. Set music.allowBuiltinTrack=true only if the user explicitly asked for the built-in track.')
+    drama = project.get('route') in bgm.DRAMA_ROUTES
+    drama_missing = drama and not music
+    drama_blocked = drama and bgm.drama_track_blocked(music, project.get('route'))
+    if drama_missing:
+        add('warn', 'drama_music', 'music', 'AI 剧尚未选定配乐：先用灵境 MiniMax Music 生成两首候选、客观粗筛并让用户试听，再把选中的文件写进 music.file；不要用空 music 出片。')
+    elif drama_blocked:
+        add('error', 'drama_bgm', 'music', 'AI 剧不允许使用内置代码动画 BGM；请改用 music.file（MiniMax Music 生成）。只有用户明确要求时才写 music.allowBuiltinTrack=true。')
+    elif drama and music.get('track') and music.get('allowBuiltinTrack'):
+        add('warn', 'drama_bgm', 'music', '已显式允许 AI 剧使用内置 BGM；请确认这是用户在对话里明确要求的，而不是模板残留。')
+    if drama and music.get('style'):
+        add('warn', 'drama_synth', 'music', '代码合成配乐只适合做氛围衬底（没有真正旋律），AI 剧主配乐应优先用 MiniMax Music 生成 music.file。')
+    if drama and music.get('file') and 'volume' not in music:
+        add('warn', 'drama_volume', 'music', 'AI 剧 music.file 未写 volume，audio.py 会按默认 0.10 处理；如需更响/更轻请显式写明。')
     try: src = bgm.resolve(music, project.get('route'))
-    except ValueError as e: src = None; add('error', 'music', 'music', str(e))
+    except ValueError as e:
+        src = None
+        if not (drama_missing or drama_blocked): add('error', 'music', 'music', str(e))
     if src == 'style':
         try: score.pick_style(music.get('style') or 'auto', project.get('route')); score.parse_key(music.get('key'))
         except ValueError as e: add('error', 'music', 'music', str(e))

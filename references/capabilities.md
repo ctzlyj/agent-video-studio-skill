@@ -38,7 +38,9 @@
 | 英文配音 | 自取 | Kokoro（`pip install kokoro`）等 |
 | 语音转写与词级时间戳 | 随包（脚本） | `scripts/transcribe.py [--words]`（faster-whisper）：校对旁白、给生成视频的对白配字幕、把画面事件钉在旁白说出关键词的瞬间 |
 | 内置 BGM | 随包 | `assets/music/vibe-knowledge.mp3`，按每镜 `mood` 起伏，见 `references/music.md` |
-| 代码合成配乐 | 随包 | 10 种风格（含 AI 剧题材预设），按分镜换和弦、加减鼓点，`scripts/score.py` |
+| AI 剧配乐（MiniMax Music 2.6） | 随包（流程） | 灵境 audio-synthesis 生成纯音乐；2 首候选、客观粗筛、用户试听；系统不报价，实测约 0.45 元/首 | `references/music.md` |
+| 代码合成配乐 | 随包 | 10 种氛围风格，按分镜换和弦、加减鼓点；没有真正旋律，只作氛围衬底，AI 剧主配乐用 MiniMax Music + `music.file`。`scripts/score.py` |
+| AI 剧配乐粗筛 | 随包（脚本） | 调式、BPM、频谱重心客观粗筛候选，最终仍需用户试听 | `scripts/music_screen.py` |
 | 音效 | 随包 | 代码合成：tick / ok / alert / whoosh / boom / pop / click / swell |
 | 音频分析（节拍、响度） | 自取 | `pip install librosa`（实测可装可用）；响度与真峰值检查已在 `scripts/finalize.py` 里 |
 | 独立评审证据包 | 随包（脚本） | 联系表、快动作条带、全分辨率帧、实测规格，交给另一个会话评审 | `scripts/review_pack.py`，评审提示词见 `references/mg-styles.md` |

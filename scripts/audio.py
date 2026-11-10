@@ -48,7 +48,10 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument('project', nargs='?'); a = ap.parse_args()
     d = project_dir(a.project); p = load_json(d / 'project.json'); tl = load_json(d / 'timeline.json'); dur = tl['duration']
     ad = d / 'audio'; ad.mkdir(exist_ok=True); m = p.get('music') or {}; rng = np.random.default_rng(3)
-    scenes = {s['id']: s for s in p['scenes']}; src = bgmmod.resolve(p.get('music'), p.get('route'), warn=True)
+    scenes = {s['id']: s for s in p['scenes']}
+    try: src = bgmmod.resolve(p.get('music'), p.get('route'), warn=True)
+    except ValueError as e: sys.exit(f'music: {e}')
+    drama = p.get('route') in bgmmod.DRAMA_ROUTES
     if src == 'file': bed = music_bed('none', dur)
     elif src == 'track':
         en = scoremod.energies_for([scenes[s['id']] for s in tl['scenes']])
@@ -80,7 +83,8 @@ def main():
         inputs = ['-i', str(bed_path)]; filt = []; k = 0; use_file = with_file_music and m.get('file')
         if use_file:
             inputs += ['-stream_loop', '-1', '-i', str(d / m['file'])]; k += 1
-            filt.append(f"[{k}:a]atrim=0:{dur},afade=t=out:st={max(0, dur - 2.5)}:d=2.5,volume={m.get('volume', .5)}[mus]")
+            file_vol = float(m.get('volume', .10 if drama else .5))
+            filt.append(f"[{k}:a]atrim=0:{dur},afade=t=out:st={max(0, dur - 2.5)}:d={min(2.5, dur)},volume={file_vol}[mus]")
         vos = []
         for s in tl['scenes']:  # clip audio: generated dialogue / ambience carried by a video asset
             sc = scenes[s['id']]
@@ -96,8 +100,8 @@ def main():
             tempo = f"atempo={s['speed']}," if abs(s['speed'] - 1) > 1e-3 else ''
             filt.append(f"[{k}:a]{tempo}adelay={dl}|{dl},volume={(p.get('voice') or {}).get('gain', 1.15)}[v{k}]"); vos.append(f'[v{k}]')
         # AI drama: keep the bed further under dialogue/ambience and duck it harder. Code animation keeps the old level.
-        drama = p.get('route') in bgmmod.DRAMA_ROUTES
-        bed_vol = .50 if drama else .62
+        # For a user-supplied music.file the file's own volume (default .10 in AI drama) is the final bed level.
+        bed_vol = 1.0 if (drama and use_file) else (.50 if drama else .62)
         duck_ratio = 8 if drama else 6
         bg = '[0:a]' if not use_file else '[0:a][mus]amix=inputs=2:normalize=0[bgm];[bgm]'
         if vos:
@@ -109,6 +113,14 @@ def main():
         run([ffmpeg(), '-y', '-hide_banner', '-loglevel', 'error', *inputs, '-filter_complex', fc, '-map', '[mix]', '-ar', str(SR), '-ac', '2', out_raw])
 
     write_bed(ad / 'bed.wav', bed); mix(ad / 'bed.wav', True, ad / 'mix_raw.wav')
+    save_json(ad / 'mix_report.json', {
+        'route': p.get('route'), 'source': src, 'musicFile': m.get('file'),
+        'musicVolume': float(m.get('volume', .10 if drama else .5)) if src == 'file' else (1.0 if (drama and src == 'file') else (.50 if drama else .62)),
+        'bedBusVolume': 1.0 if (drama and src == 'file') else (.50 if drama else .62),
+        'duckRatio': 8 if drama else 6,
+        'narrationScenes': sum(1 for s in tl['scenes'] if s.get('voDur', 0) > 0),
+        'clipAudioScenes': sum(1 for s in tl['scenes'] if scenes[s['id']].get('clipAudio')),
+    })
     run([ffmpeg(), '-y', '-hide_banner', '-loglevel', 'error', '-i', ad / 'mix_raw.wav', '-af', 'loudnorm=I=-14:TP=-1.5:LRA=11', '-ar', str(SR), ad / 'mix.wav'])
     # companion track for re-scoring later: narration + clip audio + sfx, no music (finalize.py -> *_nobgm.mp4)
     write_bed(ad / 'bed_sfx.wav', sfx_bus); mix(ad / 'bed_sfx.wav', False, ad / 'vo_sfx.wav')

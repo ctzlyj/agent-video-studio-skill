@@ -83,7 +83,7 @@ def main():
     stem = safe_name(p.get('title', 'video')); dest = d / 'deliver'
     for n in (f'{stem}.mp4', f'{stem}_nobgm.mp4', f'{stem}.srt', f'{stem}_delivery.json'):
         if (dest / n).exists():
-            sys.exit(f'refusing to overwrite deliver/{n}. Choose one: (1) keep the old delivery and make a new version: python scripts/new_project.py "{d}" --version, then copy your edits into the new folder; (2) move the old delivery aside: renaming deliver/ to deliver_<timestamp>/ and rerun finalize.py; (3) if you really no longer need that one file, delete deliver/{n} yourself.')
+            sys.exit(f'refusing to overwrite deliver/{n}. Common case: you only changed music or narration and do NOT need to regenerate the AI video clips. Choose one: (1) keep the old delivery and make a new version: python scripts/new_project.py "{d}" --version, then copy your edits into the new folder; (2) move the old delivery aside: move-rename deliver/ to deliver_<timestamp>/ and rerun finalize.py (recommended for an audio-only remix); (3) if you really no longer need that one file, delete deliver/{n} yourself.')
     rep = {'source': src.name, 'targetLUFS': a.lufs, 'checks': []}
     def chk(name, ok, detail): rep['checks'].append({'name': name, 'ok': bool(ok), 'detail': detail})
     with tempfile.TemporaryDirectory(prefix='avs_fin_') as tmp:
@@ -111,7 +111,7 @@ def main():
         if nob and nob.exists(): shutil.copy(nob, dest / f'{stem}_nobgm.mp4')
         (dest / f'{stem}.srt').write_text(srt_text(tl), encoding='utf-8')
         rep['files'] = sorted(x.name for x in dest.glob(f'{stem}*')) + [f'{stem}_delivery.json']
-        rep['notChecked'] = ['full-length human viewing', 'factual accuracy of narration', 'audio/picture sync by ear']; save_json(dest / f'{stem}_delivery.json', rep)
+        rep['notChecked'] = ['full-length human viewing', 'factual accuracy of narration', 'audio/picture sync by ear', 'pronunciation by ear', 'music fit by ear']; save_json(dest / f'{stem}_delivery.json', rep)
     print('delivered:', *[f'deliver/{n}' for n in rep['files']], sep='\n  ')
 
 if __name__ == '__main__': main()

@@ -1,5 +1,8 @@
 """Post-render QA on the final file: duration vs timeline, audio present & loudness, black/frozen frames,
 and a contact sheet sampled from the encoded MP4 (what the viewer actually sees). Writes qa/report.json.
+
+Frozen picture threshold is 6 s. A summary/endcard hold longer than that needs continuous micro-motion
+(the bundled summary/endcard templates already animate a gradient and progress bar).
 """
 from __future__ import annotations
 import argparse, json, os, re, subprocess, sys
@@ -43,10 +46,10 @@ def main():
         x, y = (i % cols) * tw, (i // cols) * (th + 24); sheet.paste(im, (x, y + 24)); dr.text((x + 6, y + 5), f"{s['id']} @ {pts[i]}s", fill=(235, 235, 235))
     sheet.save(qa / 'final_sheet.jpg', quality=88)
     for p in qa.glob('_fq_*.jpg'): p.unlink()
-    rep['sheet'] = str(qa / 'final_sheet.jpg'); rep['pass'] = all(c['ok'] for c in rep['checks'])
+    rep['sheet'] = str(qa / 'final_sheet.jpg'); rep['freezeThreshold'] = 6; rep['pass'] = all(c['ok'] for c in rep['checks'])
     rep['notChecked'] = ['full-length human viewing', 'factual accuracy of narration', 'readability at speed > 1.3x']
     save_json(qa / 'report.json', rep)
     for c in rep['checks']: print(f"{'PASS' if c['ok'] else 'FAIL'}  {c['name']}: {c['detail']}")
-    print('sheet:', rep['sheet']); sys.exit(0 if rep['pass'] else 1)
+    print('sheet:', rep['sheet']); print('INFO frozen-picture threshold: 6s; summary/endcard need continuous micro-motion.'); sys.exit(0 if rep['pass'] else 1)
 
 if __name__ == '__main__': main()

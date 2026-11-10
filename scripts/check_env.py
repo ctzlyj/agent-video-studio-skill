@@ -6,7 +6,7 @@ import argparse, importlib, os, shutil, subprocess, sys
 sys.path.insert(0, os.path.dirname(__file__))
 from avs_common import SYSTEM
 
-PKGS = {'playwright': 'playwright', 'edge_tts': 'edge-tts', 'PIL': 'pillow', 'numpy': 'numpy', 'requests': 'requests', 'imageio_ffmpeg': 'imageio-ffmpeg', 'faster_whisper': 'faster-whisper', 'pypinyin': 'pypinyin'}
+PKGS = {'playwright': 'playwright', 'edge_tts': 'edge-tts', 'PIL': 'pillow', 'numpy': 'numpy', 'requests': 'requests', 'imageio_ffmpeg': 'imageio-ffmpeg', 'faster_whisper': 'faster-whisper', 'pypinyin': 'pypinyin', 'librosa': 'librosa'}
 
 def has(mod):
     try: importlib.import_module(mod); return True

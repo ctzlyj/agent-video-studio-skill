@@ -1,6 +1,6 @@
 ---
 name: agent-video-studio
-description: 用 AI Agent 从一句需求做出成片视频的通用工作室，Windows/macOS 都能用。代码动画路线（汇报片、产品宣传片、知识讲解、口播配画面、MG 动画、纪录片/发展史、从剧本开始）用 HTML 逐帧渲染（可叠 Canvas、WebGL 着色器后期、Three.js 3D）出带旁白、字幕、内置 BGM（按剧情起伏，仅代码动画）的 MP4，并做响度校准与交付终检；AI 漫剧、AI 真人短剧和需要实拍感的镜头，用灵境 CLI + Seedance 2.5 生成后合成，配乐按题材用合成预设（不用内置 BGM）。用户给文章/链接/口播稿要做成视频时也用。用户说"做个视频""做宣传片/汇报视频/发展史/讲解动画""把这段口播做成动画""做 AI 漫剧/短剧""这个视频改快一点/换风格/加署名"时使用。只剪辑现成素材、只生成单张图片时不用。
+description: 用 AI Agent 从一句需求做出成片视频的通用工作室，Windows/macOS 都能用。代码动画路线（汇报片、产品宣传片、知识讲解、口播配画面、MG 动画、纪录片/发展史、从剧本开始）用 HTML 逐帧渲染（可叠 Canvas、WebGL 着色器后期、Three.js 3D）出带旁白、字幕、内置 BGM（按剧情起伏，仅代码动画）的 MP4，并做响度校准与交付终检；AI 漫剧、AI 真人短剧和需要实拍感的镜头，用灵境 CLI + Seedance 2.5 生成后合成，主配乐由灵境 MiniMax Music 按题材生成并让用户试听确认（不用内置 BGM）。用户给文章/链接/口播稿要做成视频时也用。用户说"做个视频""做宣传片/汇报视频/发展史/讲解动画""把这段口播做成动画""做 AI 漫剧/短剧""这个视频改快一点/换风格/加署名"时使用。只剪辑现成素材、只生成单张图片时不用。
 ---
 
 # Agent Video Studio
@@ -18,7 +18,7 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 5. **改版不覆盖。**改已交付的片子先 `new_project.py <dir> --version` 复制出新版本再改。
 6. **花钱前报价。**灵境/Seedance 等付费生成，先报价、得到用户确认再提交；结果不明时先回查任务状态，不重复提交。
 7. **说清验到了什么。**交付时给出 QA 结果和联系表；没有完整观看的就直说没看。
-8. **AI 剧先定配乐。**AI 漫剧/真人短剧在剧本+分镜确认时同时给配乐方案（题材→预设→20–30 秒试听），用户确认后再批量生成。内置 BGM 只用于代码动画；AI 剧只有用户明确要求时才用 `music.allowBuiltinTrack: true`。
+8. **AI 剧先定配乐。**AI 漫剧/真人短剧在剧本+分镜确认时同时给 2 个配乐候选（题材→MiniMax Music 提示词→客观粗筛→用户试听），用户选定前不出片。内置 BGM 只用于代码动画；代码合成只做氛围衬底，不作为 AI 剧主配乐。
 
 ## 第一步：选路线
 
@@ -53,7 +53,7 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 7. **成片**：`python "$SKILL/scripts/build.py" <项目> --final`，自动跑 lint、配音、时间线、混音、渲染、QA。
 8. **交付**：`python "$SKILL/scripts/finalize.py" <项目>` 把响度校准到 -16 LUFS、全片解码检查，输出 `deliver/` 下的成片、无 BGM 版、`.srt` 字幕和交付报告（任一检查不过就不发布）。回复里写：成片路径、时长、QA 与终检结果、联系表 `qa/final_sheet.jpg`、用到的生图模型及是否降级、没验到的点。
 
-配乐：**代码动画**默认用内置 BGM，不用配置；给每镜标 `mood` 让音量跟剧情起伏。**AI 漫剧/真人短剧不用内置 BGM**：新建项目时 `music` 是 `{"style": "auto"}`，按题材走 `workplace` / `healing` / `comedy` / `hotblood` / `suspense` / `cinematic` 等合成预设；剧本确认时先出 20–30 秒试听。**用户明确要换 BGM 才改用 `music.file` / 其他 `music.style`**。规则见 `references/music.md`。
+配乐：**代码动画**默认用内置 BGM，不用配置；给每镜标 `mood` 让音量跟剧情起伏。**AI 漫剧/真人短剧不用内置 BGM，也不用代码合成当主配乐**：新建项目 `music` 是空的，必须按 `references/music.md` 用灵境 MiniMax Music 生成 2 首候选，先跑 `music_screen.py` 粗筛，再让用户试听选定，写入 `music.file`（默认 volume 0.10）后才出片。用户明确要求时才用内置 BGM（`allowBuiltinTrack: true`）。
 
 要某种成熟动效风格、纸感/颗粒/胶带质感、运动模糊、独立评审时读 `references/mg-styles.md`。
 
@@ -70,11 +70,12 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 | `check_env.py [--install]` | 检查/安装 Python 依赖、Chromium、ffmpeg，探测网关 key 和灵境 CLI。区分"没装"和"装了但被沙箱拦"，后者不用重装 |
 | `new_project.py <dir> [--version] [--textures]` | 新建项目 / 复制出新版本；`--textures` 拷入纸张、颗粒、尘点、和纸胶带纹理包 |
 | `imagegen.py "提示词" -o a.png [--size] [--ref]` | 按配置的模型链生图（主模型优先，仅额度类错误降级） |
-| `voice.py` | 逐镜配音（edge / say / sapi / 自带录音），文本不变不重配；`--check [--asr]` 做多音字/读音校对 |
+| `voice.py` | 逐镜配音（edge / say / sapi / 自带录音），文本不变不重配；`--check [--asr]` 做多音字/读音校对；教学类默认 Xiaoxiao +12% |
 | `prep_video.py` | 视频素材拆帧，供画布逐帧确定性播放 |
 | `timeline.py` | 按旁白时长和每镜倍速生成时间线与字幕 |
-| `audio.py` | 配乐、音效、旁白混音（倍速旁白变速不变调）；代码动画默认内置 BGM，AI 剧默认合成题材配乐；都按每镜 `mood` 起伏 |
-| `bgm.py` / `score.py --list / --style X -o a.wav` | 内置 BGM 引擎（仅代码动画）/ 合成配乐引擎（含 AI 剧题材预设） |
+| `audio.py` | 配乐、音效、旁白混音（倍速旁白变速不变调）；代码动画默认内置 BGM，AI 剧默认用用户确认的 MiniMax `music.file`；都按每镜 `mood` 起伏 |
+| `bgm.py` / `score.py --list / --style X -o a.wav` | 内置 BGM 引擎（仅代码动画）/ 代码合成氛围衬底（没有真正旋律，不作 AI 剧主配乐） |
+| `music_screen.py <file>` | AI 剧配乐客观粗筛：调式、BPM、频谱重心；粗筛≠试听 |
 | `render.py --stills/--sheet/--preview/--final [--mb N --shutter S --workers N]` | 无头浏览器逐帧渲染；`--mb` 子帧运动模糊，`--workers` 多浏览器并行；输出按 BT.709 编码并打标 |
 | `review_pack.py [--moves 3.2,7.5]` | 成片后生成独立评审用的证据包（联系表、快动作条带、全分辨率帧、实测规格）到 `qa/review/` |
 | `transcribe.py <音视频>` | 本地语音转写带时间戳（faster-whisper），给生成视频对白配字幕、对齐口播稿 |

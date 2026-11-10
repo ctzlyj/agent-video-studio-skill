@@ -23,7 +23,7 @@ def fork(src: Path):
 def main():
     ap = argparse.ArgumentParser(); ap.add_argument('dir'); ap.add_argument('--title', default='未命名视频')
     ap.add_argument('--format', default='16:9', choices=FORMATS); ap.add_argument('--route', default='promo'); ap.add_argument('--version', action='store_true'); ap.add_argument('--textures', action='store_true', help='copy assets/textures into the project')
-    ap.add_argument('--music-style', choices=['auto'] + list(scoremod.STYLES), help='music.style; AI drama defaults to auto (workplace/healing by route), code animation defaults to the built-in track')
+    ap.add_argument('--music-style', choices=['auto'] + list(scoremod.STYLES), help='explicit music.style (code synthesis is atmosphere-only for AI drama); AI drama otherwise starts with music pending a MiniMax Music file')
     a = ap.parse_args(); d = Path(a.dir).resolve()
     if a.version:
         if not (d / 'project.json').exists(): sys.exit('nothing to fork')
@@ -41,9 +41,12 @@ def main():
     if a.music_style:
         p['music'] = {'style': a.music_style}
     elif a.route in DRAMA_ROUTES:
-        p['music'] = {'style': 'auto'}
+        p['music'] = {}          # pending: generate with Lingjing MiniMax Music, then set music.file
     else:
         p['music'] = {'track': 'default'}
+    if a.route in DRAMA_ROUTES:  # teaching/training defaults: warm female voice, slightly faster
+        p['voice']['voice'] = 'zh-CN-XiaoxiaoNeural'
+        p['voice']['rate'] = '+12%'
     save_json(d / 'project.json', p)
     if a.textures: shutil.copytree(SKILL_DIR / 'assets' / 'textures', d / 'assets' / 'textures', dirs_exist_ok=True)
     print(d)

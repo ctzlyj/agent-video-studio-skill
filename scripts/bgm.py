@@ -24,22 +24,26 @@ def drama_track_blocked(music, route=None):
     return route in DRAMA_ROUTES and m.get('track') == 'default' and not m.get('allowBuiltinTrack')
 
 def resolve(music, route=None, warn=False):
-    """Which music source a project uses. Priority: user file > explicit style > explicit generate > explicit track > default.
-    For AI-drama routes a bare {"track": "default"} is treated as a template accident and switched to the synthesized
-    score, unless music.allowBuiltinTrack is explicitly true."""
+    """Which music source a project uses.
+
+    Code animation: user file > explicit style > explicit generate > explicit track > built-in track.
+    AI drama: only file / explicit style (atmosphere only) / explicit generate / explicitly allowed built-in track.
+    A new AI-drama project has no music yet and must not silently inherit the code-animation track."""
     m = music or {}
     if m.get('file'): return 'file'
     if m.get('style'): return 'style'
     if m.get('generate'): return 'generate'
-    if drama_track_blocked(m, route):
-        if warn:
-            print('WARN: AI drama route should not use the built-in code-animation BGM; using the synthesized theme score instead. '
-                  'If the user explicitly asked for the built-in track, set music.allowBuiltinTrack=true.', file=sys.stderr)
-        return 'style'
+    if route in DRAMA_ROUTES:
+        if m.get('track'):
+            if m['track'] not in TRACKS: raise ValueError(f'unknown track "{m["track"]}"; choose from ' + ', '.join(TRACKS))
+            if m.get('allowBuiltinTrack'): return 'track'
+            raise ValueError('AI 剧不允许使用内置 BGM（must not use the built-in code-animation BGM）；请生成 MiniMax Music 主题曲并写 music.file，只有用户明确要求时才写 music.allowBuiltinTrack=true')
+        raise ValueError('AI 剧尚未选定配乐：先用灵境 MiniMax Music 生成主题曲并写 music.file；不要用空 music 出片（AI drama music is not selected yet）')
     if m.get('track'):
         if m['track'] not in TRACKS: raise ValueError(f'unknown track "{m["track"]}"; choose from ' + ', '.join(TRACKS))
         return 'track'
-    return 'style' if route in DRAMA_ROUTES else 'track'
+    return 'track'
+
 
 def _decode(path):
     raw = subprocess.run([ffmpeg(), '-v', 'error', '-i', str(path), '-f', 'f32le', '-ac', '2', '-ar', str(SR), '-'], capture_output=True, check=True).stdout

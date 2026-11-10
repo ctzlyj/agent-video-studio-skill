@@ -6,13 +6,27 @@ Only regenerates scenes whose text/voice changed (hash cache), or the ids you pa
   python scripts/voice.py [project] --check [--asr] [--strict]   # pronunciation review; --asr transcribes existing audio
 """
 from __future__ import annotations
-import argparse, asyncio, difflib, hashlib, json, os, re, shutil, subprocess, sys, tempfile
+import argparse, asyncio, difflib, hashlib, json, os, re, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
 sys.path.insert(0, os.path.dirname(__file__))
 from avs_common import project_dir, load_json, save_json, ffmpeg, media_duration, SYSTEM
 
 # Common polyphonic words that edge-tts gets wrong in business/teaching scripts. "try" values are homophone spellings
 # that were checked with edge-tts + faster-whisper + pypinyin (see references/voice.md); keep the original text for subtitles.
+# Whisper often returns traditional characters (e.g. 重復 for 重复). Normalise before pinyin comparison.
+T2S = {
+    '復': '复', '還': '还', '長': '长', '銀': '银', '慶': '庆', '為': '为', '據': '据', '樂': '乐', '處': '处',
+    '與': '与', '決': '决', '蟲': '虫', '這': '这', '個': '个', '說': '说', '時': '时', '會': '会', '對': '对',
+    '開': '开', '關': '关', '麼': '么', '樣': '样', '發': '发', '現': '现', '實': '实', '點': '点', '數': '数',
+    '業': '业', '環': '环', '節': '节', '級': '级', '學': '学', '習': '习', '練': '练', '討': '讨', '論': '论',
+    '總': '总', '結': '结', '產': '产', '體': '体', '驗': '验', '聽': '听', '聲': '声', '調': '调', '語': '语',
+    '畫': '画', '視': '视', '頻': '频', '導': '导', '員': '员', '劇': '剧', '場': '场', '頭': '头', '錄': '录',
+    '後': '后', '製': '制', '團': '团', '隊': '队', '專': '专', '務': '务', '資': '资', '費': '费', '預': '预',
+    '計': '计', '顯': '显', '錯': '错', '誤': '误', '檢': '检', '轉': '转', '換': '换', '歸': '归', '簡': '简',
+    '繁': '繁', '嗎': '吗', '沒': '没', '帶': '带', '嗎': '吗',
+}
+_T2S = str.maketrans(T2S)
+
 PRONOUNCE_HINTS = {
     '重复': {'read': 'chóng fù', 'try': ['虫复', '崇复'], 'note': '重 here is chóng; Yunxi/Yunyang/Xiaoxiao read it correctly in our 2026-11 test, but keep this hint if your voice reads zhòng'},
     '长度': {'read': 'cháng dù', 'try': ['常度', '肠度'], 'note': '长 here is cháng; Yunxi/Yunyang read the original as zhǎng in our test and read 常度 as cháng; Xiaoxiao was ambiguous'},
@@ -30,6 +44,7 @@ PRONOUNCE_HINTS = {
     '音乐': {'read': 'yīn yuè', 'try': ['音月'], 'note': '乐 here is yuè'},
     '快乐': {'read': 'kuài lè', 'try': ['快勒'], 'note': '乐 here is lè'},
     '还是': {'read': 'hái shì', 'try': ['孩是'], 'note': '还 here is hái'},
+    '还有': {'read': 'hái yǒu', 'try': ['孩有'], 'note': '还 here is hái; Yunxi/Xiaoxiao read it correctly in our test'},
     '归还': {'read': 'guī huán', 'try': ['归环'], 'note': '还 here is huán'},
     '处理': {'read': 'chǔ lǐ', 'try': ['楚理'], 'note': '处 here is chǔ; the tested voices already read it correctly'},
     '参与': {'read': 'cān yù', 'try': ['参玉'], 'note': '与 here is yù; the tested voices already read it correctly'},
@@ -42,15 +57,16 @@ def _say_text(project, text):
     return text
 
 def _norm_text(s):
-    return re.sub(r'[\s，。！？、；：,.!?;:“”"（）()《》【】·\-—…]', '', s or '')
+    return re.sub(r'[\s，。！？、；：,.!?;:“”"（）()《》【】·\-—…]', '', (s or '').translate(_T2S))
 
 def _pinyin(s):
     from pypinyin import lazy_pinyin, Style
     return [x for x in lazy_pinyin(_norm_text(s), style=Style.NORMAL, errors='ignore') if x.strip()]
 
 def pronunciation_hints(text):
-    """Return [(word, info)] for known polyphonic words present in text."""
-    return [(w, info) for w, info in PRONOUNCE_HINTS.items() if w in (text or '')]
+    """Return [(word, info)] for known polyphonic words present in text (traditional characters normalised first)."""
+    text = (text or '').translate(_T2S)
+    return [(w, info) for w, info in PRONOUNCE_HINTS.items() if w in text]
 
 def _check_asr(spoken, asr_text):
     """Compare pinyin syllables of the written spoken text vs the ASR transcript. Homophones with the same pinyin do
@@ -84,6 +100,7 @@ def check_project(d, p, a):
             if diffs:
                 print('  [ASR] 拼音不一致，请重点听：' + '; '.join(f"{''.join(x)}→{''.join(y)}" for _, x, y in diffs[:4])); issues += len(diffs)
             else: print('  [ASR] 拼音与配音文本一致（不代表声调一定正确）')
+    if issues: print('\n请重点听以上标出的词；ASR 通过不代表声调/语气一定正确。')
     if a.strict and issues: sys.exit(f'读音校对发现 {issues} 处需要确认')
     return issues
 
@@ -128,11 +145,12 @@ def main():
             if not wav.exists(): sys.exit(f'voice.engine=file but {wav} is missing')
         elif not a.force and meta.exists() and wav.exists() and load_json(meta).get('hash') == h: continue
         else:
-            for attempt in range(3):
+            for attempt in range(5):
                 try: synth(engine, spoken, scfg, wav); break
                 except SystemExit: raise
                 except Exception as e:
-                    if attempt == 2: sys.exit(f"TTS failed for {sc['id']}: {e}. Offline fallback: set voice.engine to {'say' if SYSTEM == 'Darwin' else 'sapi'}")
+                    if attempt == 4: sys.exit(f"TTS failed for {sc['id']}: {e}. Offline fallback: set voice.engine to {'say' if SYSTEM == 'Darwin' else 'sapi'}")
+                    time.sleep(min(5.0, 0.8 * (2 ** attempt)))
         save_json(meta, {'dur': round(media_duration(wav), 3), 'hash': h, 'engine': engine})
         print(f"{sc['id']}: {load_json(meta)['dur']:.2f}s")
     print('voice ok')

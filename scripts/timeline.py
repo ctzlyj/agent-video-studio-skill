@@ -48,8 +48,11 @@ def build(project, vo):
         dur = max(dur, float(sc.get('minDur', 0)))
         sp = float(sc.get('speed', project.get('speed', 1.0)))
         nd = dur / sp
+        chars = _chars(text) if text else 0
         scenes.append({'id': sc['id'], 'start': round(t, 3), 'dur': round(dur, 3), 'speed': sp,
                        'ns': round(nt, 3), 'nd': round(nd, 3), 'voStart': round(lead, 3), 'voDur': round(vdur, 3),
+                       'chars': chars, 'charsPerSec': round(chars / vdur, 2) if vdur > 0 else None,
+                       'voFits': (dur >= lead + vdur - 0.05) if vdur > 0 else True,
                        'transition': sc.get('transition', project.get('transition', 'fade'))})
         if sc.get('subs') and show_subs:  # explicit timed lines (scene-local 1x seconds), e.g. dialogue inside a generated clip
             for st, en, line in sc['subs']:
@@ -82,6 +85,9 @@ def main():
     save_json(d / 'timeline.json', tl)
     (d / 'timeline.js').write_text('window.TL=' + __import__('json').dumps(tl, ensure_ascii=False) + ';', encoding='utf-8')
     print(f"duration {tl['duration']:.2f}s (unsped {tl['origDuration']:.2f}s), {len(tl['scenes'])} scenes, {len(tl['subs'])} subtitles")
-    for s in tl['scenes']: print(f"  {s['id']:<8} {s['ns']:7.2f}s  len {s['nd']:6.2f}s  x{s['speed']}")
+    for s in tl['scenes']:
+        extra = f"  {s.get('charsPerSec') or 0:.1f} 字/秒" if s.get('voDur') else ''
+        print(f"  {s['id']:<8} {s['ns']:7.2f}s  len {s['nd']:6.2f}s  x{s['speed']}{extra}")
+        if not s.get('voFits', True): print(f"  WARN {s['id']}: narration is longer than the scene's dur; the tail will be cut. Raise dur or shorten the script.")
 
 if __name__ == '__main__': main()

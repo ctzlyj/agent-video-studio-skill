@@ -1,5 +1,31 @@
 # 更新记录
 
+## 1.5.0 (2026-11-10)
+
+把 AI 剧配乐从“代码合成默认”改成“MiniMax Music 生成 + 客观粗筛 + 用户试听确认”，并补配音、旁白节奏、summary/片尾模板和返工流程。
+
+### 配乐
+- **AI 剧新建项目不再写任何默认配乐**：`new_project.py` 对 `ai-comic-drama` / `ai-live-drama` 写 `music: {}`，`audio.py` 在未选定 `music.file` 时直接拒绝出片；`lint.py` 报“AI 剧尚未选定配乐”。
+- **内置 BGM 只用于代码动画**：AI 剧写 `track=default` 会被 `bgm.resolve()` 拒绝；只有用户明确要求并写 `music.allowBuiltinTrack=true` 才放行。
+- **AI 剧主配乐改走灵境 MiniMax Music 2.6**：`references/music.md` 增加 8 个题材提示词模板（成功案例原样收录）、报价说明（系统 quote:null，实测约 0.45 元/首）、`lingjing model exec` 命令、`scripts/music_screen.py` 客观粗筛（Krumhansl 调式、BPM、频谱重心）和用户试听确认流程。
+- **代码合成保留但降级**：`score.py` 的 10 种风格只作氛围衬底，没有真正旋律；AI 剧 `music.style` 会被 lint 提示“不要作为主配乐”。
+- **混音默认**：AI 剧 `music.file` 默认 `volume: 0.10`；旁白 + `clipAudio` 一起进闪避侧链，AI 剧闪避 8:1；`audio.py` 写 `mix_report.json` 记录音乐来源/音量/闪避参数。
+
+### 配音与读音
+- AI 剧教学/培训默认 `zh-CN-XiaoxiaoNeural` +12%；`XiaoyiNeural` 用于更活泼的场景。edge 合成重试从 3 次增到 5 次（指数退避）。
+- `voice.py --check --asr` 先把繁体转简体（如“重復”→“重复”）再做拼音对比；新增“还有”等常见多音字提示；补充 Xiaoxiao/Xiaoyi 声线与语速说明。
+- `references/voice.md` 保留实测表：`还款→环款` 三音色稳定；`长度→常度` Yunxi/Yunyang 有效、Xiaoxiao 有歧义；`重复` 本次测试未复现 zhòng。ASR 通过不代表声调/语气正确。
+
+### 旁白、summary 与返工
+- `ai-drama.md` 更新女声 +10~12% 的字数表：10 秒 45–52 字、13 秒 60–68 字、15 秒 70–78 字；`timeline.py` 输出每镜 `charsPerSec`，旁白超出 `dur` 时打印 `WARN ... tail will be cut`。
+- 模板 `assets/template/scenes.js` 新增 `summary`（渐变呼吸、进度条、要点错峰）、`endcard`（渐变漂移/呼吸光）和 `clip`（正放→倒放 `pingPong` 补画面）；`qa.py` 注明冻结阈值 6 秒。
+- `ai-drama.md` 增加参考图 `{{Ref N}}` 顺序、品牌/制服参考图约束、只重做音频不重跑视频素材的标准路径、交付“没验到的点”模板；`finalize.py` 的拒绝覆盖报错补“只改配乐/配音、不需要重新生成 AI 视频”的常见场景。
+
+### 验证
+- 自动测试 60 项（新增：AI 剧空/内置曲目拒绝、允许内置、music.file 混音报告、summary 微动效、music_screen 输出、繁简归一/读音）。
+- Mock `audio.py`：AI 剧空 music 和 track=default 均非 0 退出；`allowBuiltinTrack=true` 才走 track；`music.file` 生成 `mix_report`（volume 0.10、duck 8）。
+- 真实只读验证：`ep1_proj/assets/bgm.mp3` 粗筛为 D major / 123 BPM / 1907 Hz / bright；`ep1_proj` 的 c1 配音 `voice.py --check --asr` 转写与拼音一致。
+- 灵境只做了 `model list/show/quote` 只读调用；没有提交付费 Seedance 或 MiniMax 生成任务。未做 Mac 实机和真实人耳试听。
 ## 1.4.0 (2026-11-10)
 
 修正 AI 漫剧/真人短剧的配乐路线与几个实战问题。代码动画路线的默认行为不变：内置 BGM 仍只服务 promo/explainer 等代码渲染。

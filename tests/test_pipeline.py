@@ -181,7 +181,8 @@ class BuiltinTrackTest(unittest.TestCase):
     def test_source_priority_and_default(self):
         import bgm
         self.assertEqual(bgm.resolve(None, 'promo'), 'track'); self.assertEqual(bgm.resolve({}, 'documentary'), 'track')
-        self.assertEqual(bgm.resolve({}, 'ai-comic-drama'), 'style'); self.assertEqual(bgm.resolve({}, 'hybrid'), 'track')
+        with self.assertRaises(ValueError): bgm.resolve({}, 'ai-comic-drama')
+        self.assertEqual(bgm.resolve({}, 'hybrid'), 'track')
         self.assertEqual(bgm.resolve({'generate': 'none'}, 'promo'), 'generate'); self.assertEqual(bgm.resolve({'style': 'warm'}, 'promo'), 'style')
         self.assertEqual(bgm.resolve({'file': 'assets/x.mp3', 'style': 'warm', 'generate': 'none'}, 'promo'), 'file')
         with self.assertRaises(ValueError): bgm.resolve({'track': 'nope'}, 'promo')
@@ -584,26 +585,37 @@ class DramaMusicPolicyTest(unittest.TestCase):
     def test_new_project_music_by_route(self):
         with tempfile.TemporaryDirectory() as t:
             for route in ('ai-comic-drama', 'ai-live-drama'):
-                _, p = self._new(t, route); self.assertEqual(p['music'], {'style': 'auto'}, route)
+                _, p = self._new(t, route); self.assertEqual(p['music'], {}, route)
+                self.assertEqual(p['voice']['voice'], 'zh-CN-XiaoxiaoNeural'); self.assertEqual(p['voice']['rate'], '+12%')
             for route in ('promo', 'explainer', 'motion-graphics', 'hybrid'):
                 _, p = self._new(t, route); self.assertEqual(p['music'], {'track': 'default'}, route)
             _, p = self._new(t, 'ai-comic-drama', '--music-style', 'comedy'); self.assertEqual(p['music'], {'style': 'comedy'})
 
-    def test_bgm_resolve_switches_drama_builtin_track(self):
+    def test_bgm_resolve_rejects_empty_and_builtin_for_drama(self):
         import bgm
-        self.assertEqual(bgm.resolve({'track': 'default'}, 'ai-comic-drama'), 'style')
-        self.assertEqual(bgm.resolve({'track': 'default'}, 'ai-live-drama'), 'style')
+        for m in ({}, {'track': 'default'}):
+            with self.assertRaises(ValueError): bgm.resolve(m, 'ai-comic-drama')
         self.assertEqual(bgm.resolve({'track': 'default', 'allowBuiltinTrack': True}, 'ai-comic-drama'), 'track')
+        self.assertEqual(bgm.resolve({'file': 'assets/x.mp3'}, 'ai-comic-drama'), 'file')
+        self.assertEqual(bgm.resolve({'style': 'workplace'}, 'ai-comic-drama'), 'style')
         self.assertEqual(bgm.resolve({'track': 'default'}, 'promo'), 'track')
 
-    def test_lint_warns_drama_builtin_track(self):
+    def test_lint_rejects_empty_or_builtin_drama_music(self):
         import lint
+        with tempfile.TemporaryDirectory() as t:
+            p = proj(t, route='ai-comic-drama', music={})
+            issues = lint.check(json.loads((p / 'project.json').read_text(encoding='utf-8')), p)
+            self.assertTrue(any(i['kind'] == 'drama_music' and i['level'] == 'warn' for i in issues))
         with tempfile.TemporaryDirectory() as t:
             p = proj(t, route='ai-comic-drama', music={'track': 'default'})
             issues = lint.check(json.loads((p / 'project.json').read_text(encoding='utf-8')), p)
+            self.assertTrue(any(i['kind'] == 'drama_bgm' and i['level'] == 'error' for i in issues))
+        with tempfile.TemporaryDirectory() as t:
+            p = proj(t, route='ai-comic-drama', music={'track': 'default', 'allowBuiltinTrack': True})
+            issues = lint.check(json.loads((p / 'project.json').read_text(encoding='utf-8')), p)
             self.assertTrue(any(i['kind'] == 'drama_bgm' and i['level'] == 'warn' for i in issues))
 
-    def test_score_presets_and_auto_mapping(self):
+    def test_score_presets_are_atmosphere_only(self):
         import score
         for name in ('workplace', 'healing', 'comedy', 'hotblood'):
             self.assertIn(name, score.STYLES)
@@ -611,26 +623,48 @@ class DramaMusicPolicyTest(unittest.TestCase):
         self.assertEqual(score.pick_style('auto', 'ai-live-drama'), 'healing')
         self.assertEqual(score.pick_style('auto', 'documentary'), 'cinematic')
 
-    def test_audio_drama_default_uses_synth_score_even_with_builtin_track(self):
+    def _audio(self, root, music):
+        d = Path(root) / ('p' + str(len(list(Path(root).glob('p*')))))
+        subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'new_project.py'), str(d), '--title', 'drama', '--route', 'ai-comic-drama'], check=True, capture_output=True)
+        p = json.loads((d / 'project.json').read_text(encoding='utf-8'))
+        p['format'].update({'width': 640, 'height': 360, 'fps': 10}); p['voice']['engine'] = 'none'; p['music'] = music
+        if music.get('file'):
+            import wave, numpy as np
+            (d / music['file']).parent.mkdir(parents=True, exist_ok=True)
+            with wave.open(str(d / music['file']), 'wb') as w:
+                w.setnchannels(2); w.setsampwidth(2); w.setframerate(48000); tt = np.arange(48000 * 2) / 48000
+                w.writeframes((np.sin(2 * np.pi * 220 * tt) * .1 * 32767).astype('<i2').tobytes())
+        for sc in p['scenes']: sc.pop('vo', None); sc['pad'] = 0.2
+        (d / 'project.json').write_text(json.dumps(p, ensure_ascii=False), encoding='utf-8')
+        subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'timeline.py'), str(d)], check=True, capture_output=True)
+        r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'audio.py'), str(d)], capture_output=True, text=True, encoding='utf-8')
+        return d, r
+
+    def test_audio_rejects_empty_and_builtin_drama_music(self):
         with tempfile.TemporaryDirectory() as t:
-            d = Path(t) / 'p'; subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'new_project.py'), str(d), '--title', 'drama', '--route', 'ai-comic-drama'], check=True, capture_output=True)
-            p = json.loads((d / 'project.json').read_text(encoding='utf-8'))
-            p['format'].update({'width': 640, 'height': 360, 'fps': 10}); p['voice']['engine'] = 'none'; p['music'] = {'track': 'default'}
-            for sc in p['scenes']: sc.pop('vo', None); sc['pad'] = 0.2
-            (d / 'project.json').write_text(json.dumps(p, ensure_ascii=False), encoding='utf-8')
-            subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'timeline.py'), str(d)], check=True, capture_output=True)
-            r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'audio.py'), str(d)], capture_output=True, text=True, encoding='utf-8')
+            _, r = self._audio(t, {}); self.assertNotEqual(r.returncode, 0); self.assertIn('尚未选定配乐', r.stdout + r.stderr)
+        with tempfile.TemporaryDirectory() as t:
+            _, r = self._audio(t, {'track': 'default'}); self.assertNotEqual(r.returncode, 0); self.assertIn('内置 BGM', r.stdout + r.stderr)
+
+    def test_audio_allows_explicit_builtin_and_file_music(self):
+        import wave, numpy as np
+        with tempfile.TemporaryDirectory() as t:
+            d, r = self._audio(t, {'track': 'default', 'allowBuiltinTrack': True})
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr); self.assertEqual(json.loads((d / 'audio/score_report.json').read_text(encoding='utf-8'))['style'], 'track:default')
+        with tempfile.TemporaryDirectory() as t:
+            d, r = self._audio(t, {'file': 'assets/music/x.wav', 'volume': .10})
             self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-            self.assertIn('WARN: AI drama route', r.stderr)
-            rep = json.loads((d / 'audio' / 'score_report.json').read_text(encoding='utf-8'))
-            self.assertEqual(rep['style'], 'workplace')
+            rep = json.loads((d / 'audio/mix_report.json').read_text(encoding='utf-8'))
+            self.assertEqual(rep['source'], 'file'); self.assertEqual(rep['musicVolume'], .1); self.assertEqual(rep['duckRatio'], 8)
 
 
 class VoicePronunciationTest(unittest.TestCase):
     def test_hints_and_pronounce_replacement(self):
         import voice
-        hints = dict(voice.pronunciation_hints('重复的长度，银行还款，行业重庆'))
-        for w in ('重复', '长度', '银行', '还款', '行业', '重庆'): self.assertIn(w, hints)
+        hints = dict(voice.pronunciation_hints('重复的长度，银行还款，行业重庆，还有'))
+        for w in ('重复', '长度', '银行', '还款', '行业', '重庆', '还有'): self.assertIn(w, hints)
+        self.assertEqual(voice._norm_text('重復、長度、銀行、還是'), '重复长度银行还是')
+        self.assertEqual(len(voice.pronunciation_hints('重復活')), 1)
         self.assertEqual(voice._say_text({'voice': {'pronounce': {'重复': '虫复'}}}, '重复'), '虫复')
 
     def test_voice_check_cli_prints_suggestions(self):
@@ -641,6 +675,41 @@ class VoicePronunciationTest(unittest.TestCase):
             r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'voice.py'), str(d), '--check'], capture_output=True, text=True, encoding='utf-8')
             self.assertEqual(r.returncode, 0, r.stderr)
             self.assertIn('建议 重复', r.stdout); self.assertIn('建议 重新', r.stdout)
+
+
+class SummarySceneTest(unittest.TestCase):
+    def test_summary_scene_has_continuous_micro_motion(self):
+        import hashlib
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / 'p'; subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'new_project.py'), str(d), '--title', 'summary'], check=True, capture_output=True)
+            p = json.loads((d / 'project.json').read_text(encoding='utf-8'))
+            p['format'].update({'width': 640, 'height': 360, 'fps': 10}); p['voice']['engine'] = 'none'; p['music'] = {'generate': 'none'}
+            p['scenes'] = [{'id': 's01', 'type': 'summary', 'dur': 8, 'pad': 0, 'transition': 'cut', 'data': {'heading': '本集小结', 'items': ['要点一', '要点二', '要点三']}}]
+            (d / 'project.json').write_text(json.dumps(p, ensure_ascii=False), encoding='utf-8')
+            subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'timeline.py'), str(d)], check=True, capture_output=True)
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'render.py'), str(d), '--stills', '2,5'], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            files = sorted((d / 'qa').glob('still_*.png'), key=lambda f: float(f.stem.split('_')[1]))
+            self.assertEqual(len(files), 2)
+            hashes = [hashlib.md5(f.read_bytes()).hexdigest() for f in files]
+            self.assertNotEqual(hashes[0], hashes[1], 'summary page must keep moving; otherwise qa freeze check may fail')
+
+
+class MusicScreenTest(unittest.TestCase):
+    def test_music_screen_outputs_metrics_and_checks(self):
+        try: import librosa  # noqa: F401
+        except ImportError: self.skipTest('librosa not installed')
+        import wave, numpy as np
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t); wav = d / 'tone.wav'
+            with wave.open(str(wav), 'wb') as w:
+                w.setnchannels(1); w.setsampwidth(2); w.setframerate(22050); tt = np.arange(22050 * 3) / 22050
+                w.writeframes((np.sin(2 * np.pi * 440 * tt) * .2 * 32767).astype('<i2').tobytes())
+            out = d / 'screen.json'
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'music_screen.py'), str(wav), '--json', str(out)], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            rep = json.loads(out.read_text(encoding='utf-8'))
+            for k in ('bpm', 'key', 'mode', 'spectralCentroidHz', 'brightness', 'checks', 'pass'): self.assertIn(k, rep)
 
 
 if __name__ == '__main__': unittest.main()
