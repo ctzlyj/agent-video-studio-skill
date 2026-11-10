@@ -574,4 +574,73 @@ class TextureOverlayTest(unittest.TestCase):
 
 
 
+class DramaMusicPolicyTest(unittest.TestCase):
+    def _new(self, root, route, *extra):
+        d = Path(root) / f'{route}_{len(list(Path(root).glob(route + "*")))}'
+        r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'new_project.py'), str(d), '--title', 't', '--route', route, *extra], capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(r.returncode, 0, r.stderr)
+        return d, json.loads((d / 'project.json').read_text(encoding='utf-8'))
+
+    def test_new_project_music_by_route(self):
+        with tempfile.TemporaryDirectory() as t:
+            for route in ('ai-comic-drama', 'ai-live-drama'):
+                _, p = self._new(t, route); self.assertEqual(p['music'], {'style': 'auto'}, route)
+            for route in ('promo', 'explainer', 'motion-graphics', 'hybrid'):
+                _, p = self._new(t, route); self.assertEqual(p['music'], {'track': 'default'}, route)
+            _, p = self._new(t, 'ai-comic-drama', '--music-style', 'comedy'); self.assertEqual(p['music'], {'style': 'comedy'})
+
+    def test_bgm_resolve_switches_drama_builtin_track(self):
+        import bgm
+        self.assertEqual(bgm.resolve({'track': 'default'}, 'ai-comic-drama'), 'style')
+        self.assertEqual(bgm.resolve({'track': 'default'}, 'ai-live-drama'), 'style')
+        self.assertEqual(bgm.resolve({'track': 'default', 'allowBuiltinTrack': True}, 'ai-comic-drama'), 'track')
+        self.assertEqual(bgm.resolve({'track': 'default'}, 'promo'), 'track')
+
+    def test_lint_warns_drama_builtin_track(self):
+        import lint
+        with tempfile.TemporaryDirectory() as t:
+            p = proj(t, route='ai-comic-drama', music={'track': 'default'})
+            issues = lint.check(json.loads((p / 'project.json').read_text(encoding='utf-8')), p)
+            self.assertTrue(any(i['kind'] == 'drama_bgm' and i['level'] == 'warn' for i in issues))
+
+    def test_score_presets_and_auto_mapping(self):
+        import score
+        for name in ('workplace', 'healing', 'comedy', 'hotblood'):
+            self.assertIn(name, score.STYLES)
+        self.assertEqual(score.pick_style('auto', 'ai-comic-drama'), 'workplace')
+        self.assertEqual(score.pick_style('auto', 'ai-live-drama'), 'healing')
+        self.assertEqual(score.pick_style('auto', 'documentary'), 'cinematic')
+
+    def test_audio_drama_default_uses_synth_score_even_with_builtin_track(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / 'p'; subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'new_project.py'), str(d), '--title', 'drama', '--route', 'ai-comic-drama'], check=True, capture_output=True)
+            p = json.loads((d / 'project.json').read_text(encoding='utf-8'))
+            p['format'].update({'width': 640, 'height': 360, 'fps': 10}); p['voice']['engine'] = 'none'; p['music'] = {'track': 'default'}
+            for sc in p['scenes']: sc.pop('vo', None); sc['pad'] = 0.2
+            (d / 'project.json').write_text(json.dumps(p, ensure_ascii=False), encoding='utf-8')
+            subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'timeline.py'), str(d)], check=True, capture_output=True)
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'audio.py'), str(d)], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+            self.assertIn('WARN: AI drama route', r.stderr)
+            rep = json.loads((d / 'audio' / 'score_report.json').read_text(encoding='utf-8'))
+            self.assertEqual(rep['style'], 'workplace')
+
+
+class VoicePronunciationTest(unittest.TestCase):
+    def test_hints_and_pronounce_replacement(self):
+        import voice
+        hints = dict(voice.pronunciation_hints('重复的长度，银行还款，行业重庆'))
+        for w in ('重复', '长度', '银行', '还款', '行业', '重庆'): self.assertIn(w, hints)
+        self.assertEqual(voice._say_text({'voice': {'pronounce': {'重复': '虫复'}}}, '重复'), '虫复')
+
+    def test_voice_check_cli_prints_suggestions(self):
+        with tempfile.TemporaryDirectory() as t:
+            d = Path(t) / 'p'; d.mkdir()
+            p = {'title': 'v', 'voice': {'engine': 'none', 'pronounce': {}}, 'scenes': [{'id': 's01', 'vo': '这段重复活要重新做。'}]}
+            (d / 'project.json').write_text(json.dumps(p, ensure_ascii=False), encoding='utf-8')
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'voice.py'), str(d), '--check'], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(r.returncode, 0, r.stderr)
+            self.assertIn('建议 重复', r.stdout); self.assertIn('建议 重新', r.stdout)
+
+
 if __name__ == '__main__': unittest.main()

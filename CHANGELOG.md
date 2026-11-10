@@ -1,5 +1,33 @@
 # 更新记录
 
+## 1.4.0 (2026-11-10)
+
+修正 AI 漫剧/真人短剧的配乐路线与几个实战问题。代码动画路线的默认行为不变：内置 BGM 仍只服务 promo/explainer 等代码渲染。
+
+### 配乐
+- **根因修复**：`new_project.py` 不再把模板里的 `"music": {"track": "default"}` 带进 AI 剧项目。`ai-comic-drama` / `ai-live-drama` 新建时写 `{"style": "auto"}`；promo/explainer/motion-graphics/hybrid 等仍写 `{"track": "default"}`；新增 `--music-style` 可显式指定题材预设。
+- **防回归**：`bgm.resolve()` 对 AI 剧的 `track=default` 自动改走合成配乐，并在 `audio.py` 打警告；只有 `music.allowBuiltinTrack: true`（用户明确要求）才保留内置 BGM。`lint.py` 增加 `drama_bgm` 警告。
+- **新增 4 个 AI 剧题材预设**：`workplace`（轻松职场/教学，96 bpm C 大调）、`healing`（治愈日常/真人情感，78 bpm F 大调）、`comedy`（搞笑喜剧，112 bpm G 大调）、`hotblood`（热血/成长，124 bpm D 小调）。`ai-comic-drama` 的 auto 默认 `workplace`，`ai-live-drama` 默认 `healing`，不再默认 `cinematic`。
+- **混音**：AI 剧音乐床默认压到 0.50、闪避比 8:1（代码动画保持 0.62 / 6:1），旁白和 `clipAudio` 都进闪避侧链；片尾用 `resolve` + 2.5 秒淡出。
+- **文档**：`music.md` 重写优先级表和题材选择表，补“剧本/分镜确认时给 20–30 秒试听”的流程、替代方案（授权 `music.file` / 授权 AI 作曲，付费前报价）；`SKILL.md` 和 `ai-drama.md` 同步修正“AI 剧默认内置 BGM / cinematic”的矛盾说法。
+
+### 读音
+- `voice.py --check`：扫描 vo 里的常见多音字，给出替换建议；`--asr` 用 faster-whisper 转写已有音频，再用 pypinyin 做拼音级对比；`--strict` 有可疑项时返回非 0。
+- 新增 `references/voice.md`：`voice.pronounce` 持久化用法、实测替换表、ASR 方法和局限。2026-11-10 实测：`还款→环款` 在 Yunxi/Yunyang/Xiaoxiao 三个音色都稳定读 huán；`长度→常度` 在 Yunxi/Yunyang 有效，Xiaoxiao 转写有歧义；`重复` 在这几个音色的测试里已读 chóng，未复现 zhòng。字幕继续用原文。
+
+### AI 剧实战文档
+- `ai-drama.md` 更新费用口径：**2026-11-10 实测 mode=720p 但成片 1920×1080，13 秒实扣 48.8 元、10 秒 37.6 元，约为报价 3.5 倍；预估 450 元、实际约 856 元。** 报价必须按约 3.5 倍提示，并核对实际输出分辨率。
+- 每段 prompt 固定加“本段只出现 A、B，不得出现其他角色”；质检清单增加“多余角色/缺角色”。
+- 屏幕、牌子、包装只画图标/色块，不写字；需要文字用 HTML 叠加。
+- 补旁白字数表：10 秒 33–38 字、13 秒 45–50 字、15 秒 ≤50 字；先写旁白再定 duration。
+- `finalize.py` 拒绝覆盖 `deliver/` 时，报错现在给出三条具体做法（`new_project.py --version`、把旧 deliver 移到 `deliver_<时间戳>/`、只删指定旧文件）。
+
+### 验证
+- 自动测试从 50 项增到 57 项，全部通过（新增：新建项目按路线写 music、AI 剧强制走合成配乐、lint 警告、题材预设、读音提示与 `--check` CLI）。
+- 本地 mock 项目跑 `audio.py`：AI 剧即使写 `track=default`，也会警告并生成 `workplace` 配乐；代码动画仍走内置 BGM。
+- 生成 20 秒试听：`workplace` / `healing` / `comedy` / `hotblood`，并用 `cinematic` 对照（路径见交付说明）。
+- 读音：edge-tts + faster-whisper small + pypinyin 实测 3 个音色、原词/替换词对照；结论见 `references/voice.md`。
+- 未做：真实付费灵境任务（按要求不跑）；Mac 实机；人耳试听（试听文件已生成，需用户确认）。
 ## 1.3.0 (2026-11-09)
 
 融合开源仓库 mg-styles-15（Vincentwei1021，MIT）：把它 15 种动效风格里"可复用的做法和素材"并进本 skill，没有并入它的 420 MB 成片、展示站、字体、Blender 片和 mgaudio 配乐库（理由见 `references/mg-styles.md` 第六节）。

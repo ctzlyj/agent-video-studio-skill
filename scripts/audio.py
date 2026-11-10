@@ -1,6 +1,6 @@
 """Music bed + sfx + narration mix, following the (speed-mapped) timeline.
-music: omitted / {"track": "default"}  built-in track (default), ridden by each scene's mood/energy; looped if the video is longer
-       {"style": "auto"|"warm"|"bright"|"tech"|"cinematic"|"ambient"|"suspense", "bpm": 90, "key": "D minor", "seed": 7}
+music: code animation: omitted / {"track": "default"} uses the built-in track; AI drama: {"style": "auto"} uses a theme score (workplace/healing/...); both ride each scene's mood/energy
+       {"style": "auto"|"warm"|"bright"|"tech"|"cinematic"|"ambient"|"suspense"|"workplace"|"healing"|"comedy"|"hotblood", "bpm": 90, "key": "D minor", "seed": 7}
          mood-driven score that follows each scene's "mood"/"energy" (see scripts/score.py)
        {"file": "assets/music.mp3"} (licensed track) | {"generate": "ambient"|"pulse"|"none"} (legacy plain bed)
 sfx in scenes: "sfx": [[0.8, "tick"], [3.2, "ok"]]  (scene-local 1x seconds)
@@ -48,7 +48,7 @@ def main():
     ap = argparse.ArgumentParser(); ap.add_argument('project', nargs='?'); a = ap.parse_args()
     d = project_dir(a.project); p = load_json(d / 'project.json'); tl = load_json(d / 'timeline.json'); dur = tl['duration']
     ad = d / 'audio'; ad.mkdir(exist_ok=True); m = p.get('music') or {}; rng = np.random.default_rng(3)
-    scenes = {s['id']: s for s in p['scenes']}; src = bgmmod.resolve(p.get('music'), p.get('route'))
+    scenes = {s['id']: s for s in p['scenes']}; src = bgmmod.resolve(p.get('music'), p.get('route'), warn=True)
     if src == 'file': bed = music_bed('none', dur)
     elif src == 'track':
         en = scoremod.energies_for([scenes[s['id']] for s in tl['scenes']])
@@ -95,10 +95,14 @@ def main():
             k += 1; inputs += ['-i', str(wav)]; dl = int((s['ns'] + s['voStart'] / s['speed']) * 1000)
             tempo = f"atempo={s['speed']}," if abs(s['speed'] - 1) > 1e-3 else ''
             filt.append(f"[{k}:a]{tempo}adelay={dl}|{dl},volume={(p.get('voice') or {}).get('gain', 1.15)}[v{k}]"); vos.append(f'[v{k}]')
+        # AI drama: keep the bed further under dialogue/ambience and duck it harder. Code animation keeps the old level.
+        drama = p.get('route') in bgmmod.DRAMA_ROUTES
+        bed_vol = .50 if drama else .62
+        duck_ratio = 8 if drama else 6
         bg = '[0:a]' if not use_file else '[0:a][mus]amix=inputs=2:normalize=0[bgm];[bgm]'
         if vos:
-            fc = ';'.join(filt + [f"{''.join(vos)}amix=inputs={len(vos)}:normalize=0:duration=longest,apad=whole_dur={dur}[vo]", f"{bg}volume=.62,apad=whole_dur={dur}[bg]",
-                  "[vo]asplit=2[vo1][vo2]", "[bg][vo1]sidechaincompress=threshold=0.035:ratio=6:attack=20:release=350[duck]",
+            fc = ';'.join(filt + [f"{''.join(vos)}amix=inputs={len(vos)}:normalize=0:duration=longest,apad=whole_dur={dur}[vo]", f"{bg}volume={bed_vol},apad=whole_dur={dur}[bg]",
+                  f"[vo]asplit=2[vo1][vo2]", f"[bg][vo1]sidechaincompress=threshold=0.035:ratio={duck_ratio}:attack=20:release=350[duck]",
                   f"[duck][vo2]amix=inputs=2:normalize=0:duration=longest,alimiter=limit=0.92,atrim=0:{dur}[mix]"])
         else:
             fc = ';'.join(filt + [f"{bg}alimiter=limit=0.92,atrim=0:{dur}[mix]"])

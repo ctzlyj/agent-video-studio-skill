@@ -2,30 +2,44 @@
 
 The default track is mastered to sit under narration: level-matched, slow loudness drift flattened, then ridden by
 each scene's mood/energy (same fields as scripts/score.py), faded in/out, and looped with a crossfade when the video
-is longer than the track.  Public: TRACKS, resolve(music, route), render(name, scenes, energies, dur, gain=1.0).
+is longer than the track.  Public: TRACKS, resolve(music, route, warn=False), render(name, scenes, energies, dur, gain=1.0).
 """
 from __future__ import annotations
-import subprocess
+import subprocess, sys
 import numpy as np
 from avs_common import SKILL_DIR, ffmpeg
 
 SR = 48000
 TRACKS = {'default': {'file': 'assets/music/vibe-knowledge.mp3', 'title': 'Vibe知识大赏', 'bpm': 112}}
-DRAMA_ROUTES = {'ai-comic-drama', 'ai-live-drama'}   # pure AI drama keeps the cinematic generated score; hybrid (code animation + AI shots) uses the track
+DRAMA_ROUTES = {'ai-comic-drama', 'ai-live-drama'}   # pure AI drama: theme-based synthesized score; hybrid (code animation + AI shots) uses the built-in track
 TARGET_DB = -26.0      # track RMS before mood riding; the narration sidechain and final loudnorm sit on top of this
 FLATTEN = .7           # share of the track's own loudness drift that is removed (keeps some natural movement)
 MOOD_SPAN_DB = 8.0     # climax vs calm difference ~ 5 dB at the defaults
 
-def resolve(music, route=None):
-    """Which music source a project uses. Priority: user file > explicit style > explicit generate > explicit track > built-in default."""
+def drama_track_blocked(music, route=None):
+    """True when an AI-drama project would silently fall back to the built-in code-animation track.
+    The built-in track is only for code animation; AI drama uses a theme-based synthesized score unless the
+    user explicitly asked for the built-in music (music.allowBuiltinTrack = true)."""
+    m = music or {}
+    return route in DRAMA_ROUTES and m.get('track') == 'default' and not m.get('allowBuiltinTrack')
+
+def resolve(music, route=None, warn=False):
+    """Which music source a project uses. Priority: user file > explicit style > explicit generate > explicit track > default.
+    For AI-drama routes a bare {"track": "default"} is treated as a template accident and switched to the synthesized
+    score, unless music.allowBuiltinTrack is explicitly true."""
     m = music or {}
     if m.get('file'): return 'file'
     if m.get('style'): return 'style'
     if m.get('generate'): return 'generate'
+    if drama_track_blocked(m, route):
+        if warn:
+            print('WARN: AI drama route should not use the built-in code-animation BGM; using the synthesized theme score instead. '
+                  'If the user explicitly asked for the built-in track, set music.allowBuiltinTrack=true.', file=sys.stderr)
+        return 'style'
     if m.get('track'):
         if m['track'] not in TRACKS: raise ValueError(f'unknown track "{m["track"]}"; choose from ' + ', '.join(TRACKS))
         return 'track'
-    return 'style' if route in DRAMA_ROUTES else 'track'   # drama routes keep the cinematic generated score
+    return 'style' if route in DRAMA_ROUTES else 'track'
 
 def _decode(path):
     raw = subprocess.run([ffmpeg(), '-v', 'error', '-i', str(path), '-f', 'f32le', '-ac', '2', '-ar', str(SR), '-'], capture_output=True, check=True).stdout

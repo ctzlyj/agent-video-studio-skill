@@ -11,6 +11,12 @@
    The step time is quantised (`rate`), so the grain "boils" like hand-made animation instead of crawling every frame. */
 (function () {
   const base = 'assets/textures/';
+  // Preload every plate: dust/washi images are switched in during render(), so they must already be decoded before
+  // the runtime sets window.READY, otherwise a frame can be captured before the new background paints.
+  const ASSETS = ['paper_2048.jpg', 'grain_fine_2048.jpg', 'grain_film35_2048.jpg',
+    'dust_01_1920.png', 'dust_02_1920.png', 'dust_03_1920.png', 'dust_04_1920.png',
+    'washi_solid_12.png', 'washi_solid_14.png'];
+  for (const f of ASSETS) { const im = new Image(); im.src = base + f; im.style.display = 'none'; document.body.appendChild(im); }
   const hash = (n) => { let h = (n | 0) * 374761393 + 668265263; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296 };
   const LIVE = [];
   const mk = (parent, css) => { const e = document.createElement('div'); e.style.cssText = 'position:absolute;inset:0;pointer-events:none;' + css; parent.appendChild(e); return e };

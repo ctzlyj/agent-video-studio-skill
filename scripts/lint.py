@@ -65,6 +65,8 @@ def check(project, root: Path):
     if 'samples' in mbk: _num(mbk['samples'], 1, 16, 'motionBlur.samples')
     if 'shutter' in mbk: _num(mbk['shutter'], 0.05, 1.0, 'motionBlur.shutter')
     import bgm, score
+    if bgm.drama_track_blocked(music, project.get('route')):
+        add('warn', 'drama_bgm', 'music', 'AI drama routes must not use the built-in code-animation BGM; resolve() will switch to the synthesized theme score. Set music.allowBuiltinTrack=true only if the user explicitly asked for the built-in track.')
     try: src = bgm.resolve(music, project.get('route'))
     except ValueError as e: src = None; add('error', 'music', 'music', str(e))
     if src == 'style':

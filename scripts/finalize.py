@@ -82,7 +82,8 @@ def main():
     if not src or not src.exists(): sys.exit('no final render found in out/. Run build.py --final first.')
     stem = safe_name(p.get('title', 'video')); dest = d / 'deliver'
     for n in (f'{stem}.mp4', f'{stem}_nobgm.mp4', f'{stem}.srt', f'{stem}_delivery.json'):
-        if (dest / n).exists(): sys.exit(f'refusing to overwrite deliver/{n}; fork a new version (new_project.py --version) or remove it yourself')
+        if (dest / n).exists():
+            sys.exit(f'refusing to overwrite deliver/{n}. Choose one: (1) keep the old delivery and make a new version: python scripts/new_project.py "{d}" --version, then copy your edits into the new folder; (2) move the old delivery aside: renaming deliver/ to deliver_<timestamp>/ and rerun finalize.py; (3) if you really no longer need that one file, delete deliver/{n} yourself.')
     rep = {'source': src.name, 'targetLUFS': a.lufs, 'checks': []}
     def chk(name, ok, detail): rep['checks'].append({'name': name, 'ok': bool(ok), 'detail': detail})
     with tempfile.TemporaryDirectory(prefix='avs_fin_') as tmp:

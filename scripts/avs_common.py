@@ -26,7 +26,7 @@ def ffmpeg() -> str:
     lj = shutil.which('lingjing')
     if lj:
         try:
-            out = subprocess.run([lj, 'clip', 'which-ffmpeg'], capture_output=True, text=True, timeout=20).stdout.strip().splitlines()
+            out = subprocess.run([lj, 'clip', 'which-ffmpeg'], capture_output=True, text=True, encoding='utf-8', errors='ignore', timeout=20).stdout.strip().splitlines()
             cand = [x.strip() for x in out if x.strip() and Path(x.strip()).exists()]
             if cand: return cand[-1]
         except Exception: pass

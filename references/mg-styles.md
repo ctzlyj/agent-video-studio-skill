@@ -6,7 +6,7 @@
 
 ## 一、15 种风格卡
 
-每张卡：**认出它靠什么** / **怎么做（数值是来源仓库提示词里的经验值）** / **在本引擎里怎么落地** / **配乐可选**。配乐名是 `scripts/score.py` 或 `music.style` 能直接用的最接近风格（本包的合成配乐只有 warm / bright / tech / cinematic / ambient / suspense 六种，见 `music.md`）。
+每张卡：**认出它靠什么** / **怎么做（数值是来源仓库提示词里的经验值）** / **在本引擎里怎么落地** / **配乐可选**。配乐名是 `scripts/score.py` 或 `music.style` 能直接用的最接近风格（本包的合成配乐有 warm / bright / tech / cinematic / ambient / suspense / workplace / healing / comedy / hotblood 十种，见 `music.md`）。
 
 | 风格 | 认出它靠什么 | 怎么做 | 在本引擎里怎么落地 | 配乐 |
 |---|---|---|---|---|

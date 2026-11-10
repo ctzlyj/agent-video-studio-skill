@@ -38,7 +38,7 @@
 | 英文配音 | 自取 | Kokoro（`pip install kokoro`）等 |
 | 语音转写与词级时间戳 | 随包（脚本） | `scripts/transcribe.py [--words]`（faster-whisper）：校对旁白、给生成视频的对白配字幕、把画面事件钉在旁白说出关键词的瞬间 |
 | 内置 BGM | 随包 | `assets/music/vibe-knowledge.mp3`，按每镜 `mood` 起伏，见 `references/music.md` |
-| 代码合成配乐 | 随包 | 6 种风格，按分镜换和弦、加减鼓点，`scripts/score.py` |
+| 代码合成配乐 | 随包 | 10 种风格（含 AI 剧题材预设），按分镜换和弦、加减鼓点，`scripts/score.py` |
 | 音效 | 随包 | 代码合成：tick / ok / alert / whoosh / boom / pop / click / swell |
 | 音频分析（节拍、响度） | 自取 | `pip install librosa`（实测可装可用）；响度与真峰值检查已在 `scripts/finalize.py` 里 |
 | 独立评审证据包 | 随包（脚本） | 联系表、快动作条带、全分辨率帧、实测规格，交给另一个会话评审 | `scripts/review_pack.py`，评审提示词见 `references/mg-styles.md` |

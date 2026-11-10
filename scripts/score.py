@@ -37,6 +37,18 @@ STYLES = {
     'suspense': dict(desc='紧张悬疑，低频心跳和不协和和弦；揭秘、问题、危机', bpm=90, tonic='E', mode='phrygian', prog=[0, 1, 0, 6], seventh=False,
                      chord_bars=2, pad=(6, 1.3, 1.2), lead='bell', lead_div=1, lead_gain=.5, bass=None,
                      kick='x.x.............', kick_at=.3, hat='', hat_at=2, clap='', clap_at=2, reverb=.28),
+    'workplace': dict(desc='轻松职场/教学漫剧：温暖电钢琴琶音、轻打击，不抢旁白', bpm=96, tonic='C', mode='major', prog=[0, 5, 3, 4], seventh=True,
+                      chord_bars=2, pad=(4, 1.4, .8), lead='pluck', lead_div=2, lead_gain=.8, bass=None,
+                      kick='x.......x.......', kick_at=.55, hat='..x...x...x...x.', hat_at=.7, clap='', clap_at=2, reverb=.18),
+    'healing': dict(desc='治愈日常：慢速钢琴/铃音、稀疏节奏，留白多', bpm=78, tonic='F', mode='major', prog=[0, 3, 5, 4], seventh=True,
+                    chord_bars=2, pad=(6, 2.0, 1.4), lead='bell', lead_div=1, lead_gain=.55, bass=None,
+                    kick='', kick_at=2, hat='', hat_at=2, clap='', clap_at=2, reverb=.32),
+    'comedy': dict(desc='搞笑喜剧：跳跃拨弦、轻拍手和短促鼓点，节奏俏皮', bpm=112, tonic='G', mode='major', prog=[0, 4, 5, 3], seventh=False,
+                   chord_bars=2, pad=(3, 1.2, .4), lead='pluck', lead_div=2, lead_gain=1.0, bass='x.x.x.x.x.x.x.x.',
+                   kick='x...x...x...x...', kick_at=.45, hat='..x...x...x...x.', hat_at=.55, clap='....x.......x...', clap_at=.7, reverb=.12),
+    'hotblood': dict(desc='热血：推进感强的低音与四拍鼓点，适合成长、逆袭、比赛', bpm=124, tonic='D', mode='minor', prog=[0, 5, 3, 6], seventh=False,
+                     chord_bars=2, pad=(5, 1.4, .7), lead='square', lead_div=2, lead_gain=.9, bass='x.x.x.x.x.x.x.x.',
+                     kick='x...x...x...x...', kick_at=.4, hat='x.x.x.x.x.x.x.x.', hat_at=.5, clap='....x.......x...', clap_at=.75, reverb=.14),
 }
 
 def _t(n, dur): return np.arange(int(n * dur)) / n
@@ -187,7 +199,7 @@ def analyze(bed, scenes, energies):
         if hi[0] - lo[0] >= .3: ok_arc = hi[1] - lo[1] >= 1.5; note = f'energy {lo[0]:.2f}->{hi[0]:.2f}: {lo[1]} dB -> {hi[1]} dB'
     return {'sceneRmsDb': lv, 'peak': round(peak, 3), 'noClip': peak < .99, 'arcOk': ok_arc, 'arcNote': note}
 ROUTE_STYLE = {'promo': 'warm', 'product-demo': 'tech', 'explainer': 'ambient', 'voiceover': 'warm', 'motion-graphics': 'bright',
-               'documentary': 'cinematic', 'script-first': 'warm', 'ai-comic-drama': 'cinematic', 'ai-live-drama': 'cinematic', 'hybrid': 'cinematic'}
+               'documentary': 'cinematic', 'script-first': 'warm', 'ai-comic-drama': 'workplace', 'ai-live-drama': 'healing', 'hybrid': 'cinematic'}
 def pick_style(style, route=None):
     if style == 'auto': return ROUTE_STYLE.get(route or '', 'warm')
     if style not in STYLES: raise ValueError(f'unknown music style "{style}"; choose from auto, ' + ', '.join(STYLES))
