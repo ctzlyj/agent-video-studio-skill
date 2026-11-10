@@ -117,6 +117,7 @@ python scripts/music_screen.py <音频> --expect-mode major --bpm-min 100 --bpm-
 - 调式用 chroma + Krumhansl 模板粗估；BPM 用 `librosa.beat.beat_track`；亮度用频谱重心。
 - 本次成功提示词的目标：大调、约 120 BPM、明亮；第一次偏忧郁的 E 小调候选应在给用户听之前被淘汰。
 - **本次实测参考**：最终选中的 MiniMax 曲粗筛为 D major / 123 BPM / 频谱重心约 1907 Hz / bright；第一次偏忧郁的 E 小调候选应在给用户试听前淘汰。
+- **2026-11-10 另一次验证**：用上面的成功提示词提交 1 首（taskId 18789322），输出 25.24 秒、BPM 123、频谱重心 2105 Hz，但调式粗筛为 B minor，`--expect-mode major` 未通过，因此没有采用。提示词不保证调式/时长，必须粗筛 + 用户试听；`music.file` 短于成片时会循环并淡出。
 - **粗筛不能代替试听**：它判断不了旋律、编曲、是否贴合剧情、旁白是否被盖住；最终必须让用户听。
 
 ## 混音：AI 剧 `music.file` 默认 0.10
