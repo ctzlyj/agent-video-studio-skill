@@ -712,4 +712,22 @@ class MusicScreenTest(unittest.TestCase):
             for k in ('bpm', 'key', 'mode', 'spectralCentroidHz', 'brightness', 'checks', 'pass'): self.assertIn(k, rep)
 
 
+class AiDramaPreflightTest(unittest.TestCase):
+    def test_skill_and_cli_discovery(self):
+        import ai_drama_preflight as pf
+        with tempfile.TemporaryDirectory() as t:
+            root = Path(t); (root / 'lingjing').mkdir(); (root / 'lingjing' / 'SKILL.md').write_text('x', encoding='utf-8')
+            (root / 'lingjing-director').mkdir(); (root / 'lingjing-director' / 'SKILL.md').write_text('x', encoding='utf-8')
+            cli = root / 'lingjing.exe'; cli.write_text('x', encoding='utf-8')
+            self.assertEqual(pf.find_cli(str(cli)), str(cli))
+            self.assertEqual(pf.find_skill('lingjing', [str(root)]), str(root / 'lingjing'))
+            self.assertEqual(pf.find_skill('lingjing-director', [str(root)]), str(root / 'lingjing-director'))
+
+    def test_missing_dependencies_stop_with_install_and_no_browser_fallback(self):
+        with tempfile.TemporaryDirectory() as t:
+            r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'ai_drama_preflight.py'), '--cli', str(Path(t) / 'missing.exe'), '--skill-root', t], capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(r.returncode, 2, r.stdout + r.stderr)
+            self.assertIn('NOT READY', r.stdout); self.assertIn('lingjing-cli.zip', r.stdout); self.assertIn('不要把“浏览器自动化点灵境画布”当作兜底', r.stdout)
+
+
 if __name__ == '__main__': unittest.main()

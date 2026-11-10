@@ -60,7 +60,7 @@ def main():
     key = bool(os.environ.get('JD_LLM_API_KEY') or os.environ.get('AVS_IMAGE_API_KEY'))
     rows.append(('image gateway key (JD_LLM_API_KEY / AVS_IMAGE_API_KEY)', 'set' if key else 'not set (image generation disabled)', True))
     lj = shutil.which('lingjing') or next((p for p in [os.path.expanduser('~/.lingjing/bin/lingjing'), os.path.expanduser('~/.lingjing/bin/lingjing.exe')] if os.path.exists(p)), None)
-    rows.append(('lingjing CLI (AI drama routes only)', lj or 'not installed (optional)', True))
+    rows.append(('lingjing CLI (required for AI drama; run ai_drama_preflight.py)', lj or 'not installed (AI drama blocked; install the Lingjing one-package)', True))
     offline = 'say (macOS)' if SYSTEM == 'Darwin' else ('SAPI (Windows)' if SYSTEM == 'Windows' else 'espeak if installed')
     rows.append(('offline TTS fallback', offline, True))
     # optional capabilities (never block READY; see references/capabilities.md)

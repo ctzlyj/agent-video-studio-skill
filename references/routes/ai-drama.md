@@ -10,11 +10,24 @@ suihe1/short-drama-production 与 xixihhhh/ai-short-drama-skill（剧本→分�
 
 ## 第一次用之前（一次性，约 2 分钟）
 
+0. **硬前置：灵境 CLI + skill 预检**：先运行 `python scripts/ai_drama_preflight.py`。它会检查 `lingjing` CLI、`lingjing` skill、`lingjing-director` skill 和 `lingjing doctor`；任何一项不通过就停止，按输出安装，不要继续用浏览器操作画布。当前机器实测 READY 的输出是：CLI 存在、两个 skill 存在、identityVerified=true、bridge=online。
+
 Mac 实测里，用户走到第一次花钱提交才被拦：`错误: [539] 使用素材库功能，请先同意Seedance2.0模型使用承诺书`。这些都是**要用户本人做**的事，先做完再开始创作：
 1. **登录灵境**：`lingjing login`。无头 / 沙箱里的 agent 打不开浏览器时，用 `lingjing login --no-open`，它会打印一条 `https://oauth2.jdcloud.com/authorize?...` 授权链接；**把这条链接发给用户**，让用户在自己的浏览器里完成登录，agent 在本机等回调。第一次可能报 `网络请求失败`，再跑一次通常就给出链接。
 2. **签《Seedance2.0 模型使用承诺书》**：只能用户本人在灵境网页「素材库」里读完并签署（`lingjing` 会给出链接，`userActionRequired: read_and_sign_in_browser`）。不签，视频参考图送审和付费提交都会被拦（错误码 539）。
 3. **看余额**：`lingjing wallet`。`canSpend: true` 只表示提交闸不会拦，**不代表余额够跑完**，预算看报价。
 4. **自检**：`python scripts/check_env.py`。
+
+## 为什么不能用浏览器代点灵境画布
+
+`lingjing` CLI 负责认证、模型参数校验、两阶段扣费、画布写入安全、任务恢复和成片交付；浏览器只用于用户登录和视觉验收。**用浏览器自动化点画布不是“降级方案”**：
+
+- 会绕过 CLI 的报价/确认闸和画布写入校验；
+- 生成/扣费结果没有统一的 taskId 和恢复路径；
+- 无法可靠复现和审计，容易重复提交、重复扣费；
+- 同事机器上如果只装了 `agent-video-studio`、没装灵境一体包，正确做法是安装 CLI + `lingjing` + `lingjing-director`，而不是让 Agent 去点网页。
+
+安装入口：`https://j.jdcloud.com/lingjing-cli/latest/lingjing-cli.zip`；Windows 解压后设置 `LINGJING_SKILL_DIR="$HOME\.codex\skills"` 再运行 `install.ps1`；安装后重启 Codex、新开会话，先跑 `lingjing doctor`。
 
 ## 流程
 1. **剧本**：一集 30–90 秒。写成分场剧本：场景、时间、人物、动作、对白、情绪。对白短，一句一个情绪点。确认后再出图。

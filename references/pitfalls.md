@@ -41,3 +41,4 @@
 | 代码合成配乐“诡异、不轻松” | `score.py` 没有真正旋律线，只是和弦/琶音 | AI 剧主配乐改用 MiniMax Music；`music.style` 只作氛围衬底，`lint.py` 会警告 |
 | MiniMax Music 没有报价 | `lingjing model quote` 对该模型返回 `quote:null` | 按实测约 0.45 元/首告知用户，系统不报价、以账单为准；提交前确认 2 首预算 |
 | summary/endcard 超过 6 秒被 qa 报 frozen | 长停留页做成完全静态 | 用模板的 `summary`/`endcard`（渐变呼吸、进度条、呼吸光）；`qa.py` 的冻结阈值是 6 秒 |
+| Agent 用浏览器自动化点灵境画布 | 本机没装灵境 CLI / `lingjing` skill，或装了但没重启/新会话，Agent 没拿到 CLI 契约 | 运行 `python scripts/ai_drama_preflight.py`；缺依赖就安装灵境一体包并重启；浏览器只用于登录/视觉验收，不用于生成、扣费、画布写入 |

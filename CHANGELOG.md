@@ -1,5 +1,19 @@
 # 更新记录
 
+## 1.5.2 (2026-11-10)
+
+修复“同事机器上 Agent 不调用灵境 CLI、改用浏览器自动化点画布”的问题。
+
+### 根因与修复
+- `agent-video-studio` 不随包携带灵境 CLI/`lingjing` skill，旧版 `check_env.py` 又把 CLI 标成 optional；只装 `agent-video-studio` 的机器没有 CLI 契约，Agent 就退回浏览器。
+- 新增 `scripts/ai_drama_preflight.py`：AI 剧开始前硬检查 `lingjing` CLI、`lingjing` skill、`lingjing-director` skill 和 `lingjing doctor`；缺任何一项直接非 0 退出，并打印灵境一体包安装入口、`LINGJING_SKILL_DIR` 设置方法和重启/新会话要求。
+- `SKILL.md` 新增硬规则 8、`ai-drama.md` 新增“第一次用之前”第 0 步和“为什么不能用浏览器代点灵境画布”：浏览器只用于用户登录/视觉验收，不用于生成、扣费或画布写入。
+- `check_env.py` 把 lingjing 行改为“AI drama required”，不再暗示 optional；`pitfalls.md` 增加对应排错行。
+
+### 验证
+- 自动测试 62 项（新增：预检发现 CLI/skill、缺依赖时退出码 2 且打印安装说明和禁止浏览器代点）。
+- 当前机器运行 `python scripts/ai_drama_preflight.py`：CLI、`lingjing`、`lingjing-director`、`lingjing doctor` 全过（identityVerified=true、bridge=online），READY (AI drama)。
+- 未提交付费生成任务；未改内置 BGM 文件和授权。
 ## 1.5.1 (2026-11-10)
 
 补 1 次真实 MiniMax Music 验证记录（用户授权，仅 1 首）：

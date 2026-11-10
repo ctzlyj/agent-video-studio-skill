@@ -18,7 +18,8 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 5. **改版不覆盖。**改已交付的片子先 `new_project.py <dir> --version` 复制出新版本再改。
 6. **花钱前报价。**灵境/Seedance 等付费生成，先报价、得到用户确认再提交；结果不明时先回查任务状态，不重复提交。
 7. **说清验到了什么。**交付时给出 QA 结果和联系表；没有完整观看的就直说没看。
-8. **AI 剧先定配乐。**AI 漫剧/真人短剧在剧本+分镜确认时同时给 2 个配乐候选（题材→MiniMax Music 提示词→客观粗筛→用户试听），用户选定前不出片。内置 BGM 只用于代码动画；代码合成只做氛围衬底，不作为 AI 剧主配乐。
+8. **AI 剧先过灵境预检。**AI 漫剧/真人短剧开始前必须运行 `python "$SKILL/scripts/ai_drama_preflight.py"`；CLI、`lingjing` skill、`lingjing-director` skill、`lingjing doctor` 四项全过才继续。缺任何一项就停止并按输出安装，**不要把浏览器自动化点灵境画布当兜底**；浏览器只用于用户登录/视觉验收，不用于生成、扣费或画布写入。
+9. **AI 剧先定配乐。**AI 漫剧/真人短剧在剧本+分镜确认时同时给 2 个配乐候选（题材→MiniMax Music 提示词→客观粗筛→用户试听），用户选定前不出片。内置 BGM 只用于代码动画；代码合成只做氛围衬底，不作为 AI 剧主配乐。
 
 ## 第一步：选路线
 
@@ -77,6 +78,7 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 | `bgm.py` / `score.py --list / --style X -o a.wav` | 内置 BGM 引擎（仅代码动画）/ 代码合成氛围衬底（没有真正旋律，不作 AI 剧主配乐） |
 | `music_screen.py <file>` | AI 剧配乐客观粗筛：调式、BPM、频谱重心；粗筛≠试听 |
 | `render.py --stills/--sheet/--preview/--final [--mb N --shutter S --workers N]` | 无头浏览器逐帧渲染；`--mb` 子帧运动模糊，`--workers` 多浏览器并行；输出按 BT.709 编码并打标 |
+| `ai_drama_preflight.py` | AI 剧硬前置：检查灵境 CLI、`lingjing`/`lingjing-director` skill 和 `lingjing doctor`；不通过就停，禁止浏览器代点 |
 | `review_pack.py [--moves 3.2,7.5]` | 成片后生成独立评审用的证据包（联系表、快动作条带、全分辨率帧、实测规格）到 `qa/review/` |
 | `transcribe.py <音视频>` | 本地语音转写带时间戳（faster-whisper），给生成视频对白配字幕、对齐口播稿 |
 | `finalize.py [--lufs -16]` | 交付终检：响度校准到目标、真峰值、全片解码、黑场；输出成片 / 无 BGM 版 / SRT / 报告到 `deliver/`，不通过不发布 |
