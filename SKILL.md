@@ -62,6 +62,8 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 
 读音：中文多音字（还款、长度、重复、银行、重庆等）的实测替换表、`voice.pronounce` 用法和 `voice.py --check [--asr]` 的局限见 `references/voice.md`。
 
+版本更新：O2 没有原生 per-skill 自动更新；用 `references/updates.md` 的 `self_update.py` 或一次性安装 `install_auto_update.py`。更新后重启/新开会话才生效。
+
 写 `scenes.js` 前读 `references/engine.md`（运行时 API、确定性规则、视频素材、倍速）。踩坑与排查见 `references/pitfalls.md`。
 
 ## 脚本速查
@@ -77,6 +79,8 @@ description: 用 AI Agent 从一句需求做出成片视频的通用工作室，
 | `audio.py` | 配乐、音效、旁白混音（倍速旁白变速不变调）；代码动画默认内置 BGM，AI 剧默认用用户确认的 MiniMax `music.file`；都按每镜 `mood` 起伏 |
 | `bgm.py` / `score.py --list / --style X -o a.wav` | 内置 BGM 引擎（仅代码动画）/ 代码合成氛围衬底（没有真正旋律，不作 AI 剧主配乐） |
 | `music_screen.py <file>` | AI 剧配乐客观粗筛：调式、BPM、频谱重心；粗筛≠试听 |
+| `self_update.py [--apply]` | 检查/一键更新本 Skill（走 O2 `oxygenskills`）；更新后需重启/新会话 |
+| `install_auto_update.py --time 07:30` | 一次性安装每日自动更新任务（Windows 计划任务 / macOS launchd）；`--dry-run` 只预览 |
 | `render.py --stills/--sheet/--preview/--final [--mb N --shutter S --workers N]` | 无头浏览器逐帧渲染；`--mb` 子帧运动模糊，`--workers` 多浏览器并行；输出按 BT.709 编码并打标 |
 | `ai_drama_preflight.py` | AI 剧硬前置：检查灵境 CLI、`lingjing`/`lingjing-director` skill 和 `lingjing doctor`；不通过就停，禁止浏览器代点 |
 | `review_pack.py [--moves 3.2,7.5]` | 成片后生成独立评审用的证据包（联系表、快动作条带、全分辨率帧、实测规格）到 `qa/review/` |

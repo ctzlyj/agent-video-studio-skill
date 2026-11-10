@@ -730,4 +730,25 @@ class AiDramaPreflightTest(unittest.TestCase):
             self.assertIn('NOT READY', r.stdout); self.assertIn('lingjing-cli.zip', r.stdout); self.assertIn('不要把“浏览器自动化点灵境画布”当作兜底', r.stdout)
 
 
+class SelfUpdateTest(unittest.TestCase):
+    def test_parse_check_output(self):
+        import self_update as su
+        text = '1. agent-video-studio\n   Current: 1.5.2\n   Latest: 1.6.0\n'
+        self.assertEqual(su.parse_check(text), '1.6.0')
+        self.assertIsNone(su.parse_check('1. other\n   Current: 1.0.0\n   Latest: 2.0.0\n'))
+
+    def test_local_version_reads_changelog(self):
+        import re, self_update as su
+        v = su.local_version(); self.assertRegex(v, r'^\d+\.\d+\.\d+$')
+        text = (SK / 'CHANGELOG.md').read_text(encoding='utf-8')
+        self.assertIn('## ' + v, text)
+
+    def test_auto_update_installer_dry_run(self):
+        r = subprocess.run([sys.executable, '-X', 'utf8', str(SK / 'scripts' / 'install_auto_update.py'), '--time', '07:30', '--dry-run'], capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
+        out = r.stdout.lower()
+        self.assertIn('--apply', out); self.assertIn('--quiet', out)
+        self.assertTrue(any(x in out for x in ('schtasks', 'launchd', 'crontab')), out)
+
+
 if __name__ == '__main__': unittest.main()

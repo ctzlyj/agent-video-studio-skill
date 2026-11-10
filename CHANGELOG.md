@@ -1,5 +1,19 @@
 # 更新记录
 
+## 1.6.0 (2026-11-10)
+
+增加可选的自动更新能力，解决“每次都要手动更新”的问题。
+
+### 新增
+- `scripts/self_update.py`：通过 O2 `oxygenskills check/update` 检查是否有新版；`--apply` 一键更新；更新后提示重启 Codex/新开会话。保留最近 2 个 `agent-video-studio.backup.*`。
+- `scripts/install_auto_update.py`：一次性安装每日自动更新任务（Windows 计划任务、macOS launchd；Linux 打印 cron 配置）。`--dry-run` 只预览，`--uninstall` 移除任务；日志写入本机用户目录。
+- `references/updates.md`：说明 O2 没有原生 per-skill 自动更新、当前会话不会热加载、自动更新需要 O2 登录/网络，以及自动更新**不会**安装灵境 CLI（AI 剧仍要跑 `ai_drama_preflight.py`）。
+- `SKILL.md` 脚本速查加入更新脚本和版本更新说明。
+
+### 验证
+- 自动测试 65 项：新增 `self_update` 版本解析、`local_version`、自动更新安装器 `--dry-run`。
+- 本机 `python scripts/self_update.py --json` 当前显示已是最新（1.5.2；发布本版后为 1.6.0）。
+- 未注册本机计划任务（只做 dry-run）；未提交付费任务。
 ## 1.5.2 (2026-11-10)
 
 修复“同事机器上 Agent 不调用灵境 CLI、改用浏览器自动化点画布”的问题。
